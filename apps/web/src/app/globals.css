@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-input: var(--input);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+:root {
+  --radius: 0.5rem;
+  --background: #f8faf8;
+  --foreground: #17211b;
+  --card: #ffffff;
+  --card-foreground: #17211b;
+  --muted: #edf2ef;
+  --muted-foreground: #58675e;
+  --accent: #e4eee8;
+  --accent-foreground: #17211b;
+  --border: #d7e1da;
+  --input: #d7e1da;
+  --ring: #0f7b5f;
+  --primary: #0f7b5f;
+  --primary-foreground: #ffffff;
+  --destructive: #b42318;
+  --destructive-foreground: #ffffff;
+}
+
+.dark {
+  --background: #0d1411;
+  --foreground: #edf7f1;
+  --card: #121d18;
+  --card-foreground: #edf7f1;
+  --muted: #1b2923;
+  --muted-foreground: #9bb0a6;
+  --accent: #20352c;
+  --accent-foreground: #edf7f1;
+  --border: #263b32;
+  --input: #263b32;
+  --ring: #31c48d;
+  --primary: #31c48d;
+  --primary-foreground: #07100c;
+  --destructive: #f97066;
+  --destructive-foreground: #160604;
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+@keyframes message-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-message-in {
+  animation: message-in 180ms ease-out both;
+}
