@@ -17,4 +17,3 @@ CurrentUser = Annotated[AuthenticatedUser, Depends(get_current_user)]
 async def admin_status(current_user: CurrentUser) -> ApiEnvelope:
     logger.info("admin_status | user_id=%s", current_user.user_id)
     return ApiEnvelope(data={"status": "placeholder"}, error=None, message="Admin routes pending.")
-
