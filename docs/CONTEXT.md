@@ -30,4 +30,5 @@ responses referencing the Quran, Hadith, and scholarly works.
 - Python: snake_case, type hints everywhere, Pydantic v2 models
 - TypeScript: camelCase, strict mode, Zod for validation
 - API responses: { data, error, message } envelope pattern
+- Local backend env uses `ENVIRONMENT=local`; deployed backend env should use `ENVIRONMENT=production`
 - All env vars in .env (backend) and .env.local (frontend), never committed

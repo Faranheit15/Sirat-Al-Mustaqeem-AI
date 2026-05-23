@@ -65,9 +65,17 @@ Authenticated routes should use `get_current_user` from `backend/app/dependencie
 
 For local Swagger UI testing, `AUTH_REQUIRED=false` allows protected routes to run without a bearer token. Requests without a token use `LOCAL_DEV_USER_ID` and `LOCAL_DEV_USER_EMAIL` as the authenticated user. If a bearer token is supplied, it is still verified normally.
 
+The bypass is only available when `ENVIRONMENT=local` or `ENVIRONMENT=test`. Deployed environments should set `ENVIRONMENT=production` and `AUTH_REQUIRED=true`.
+
 If Supabase tables enforce a foreign key to `auth.users`, set `LOCAL_DEV_USER_ID` to an existing Supabase user UUID before testing conversation writes.
 
-Production-like environments should set `AUTH_REQUIRED=true`.
+For deployed Swagger testing, use the Swagger Authorize button with a real Supabase access token instead of relying on local bypass.
+
+Production-like environments should set `ENVIRONMENT=production` and `AUTH_REQUIRED=true`.
+
+## Swagger Chat Testing
+
+When starting a new chat through Swagger, omit `conversation_id` or send `null`. The backend normalizes Swagger's placeholder value `"string"` to `null` so it creates a new conversation instead of trying to save messages to a fake id.
 
 ## Health Details
 

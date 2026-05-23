@@ -6,6 +6,7 @@ All notable changes to Sirat Al Mustaqeem AI will be documented in this file.
 
 ### Added
 
+- Widened `requires-python` from `">=3.12,<3.13"` to `">=3.12"` and regenerated `uv.lock` to unblock FastAPI Cloud builds (build environment ships Python 3.13; the old strict upper bound caused uv to fail with `No such file or directory` when looking for `python3.12`).
 - GitHub Actions workflow `.github/workflows/backend.yml` for backend CI/CD: ruff lint, ruff format check, and mypy on every PR; deploy to FastAPI Cloud on every push to main (deploy job is gated on lint passing).
 - Fixed `backend/Dockerfile` to copy `uv.lock` alongside `pyproject.toml` and use `uv sync --frozen --no-dev` for reproducible production image builds.
 
@@ -28,6 +29,8 @@ All notable changes to Sirat Al Mustaqeem AI will be documented in this file.
 - Backend `.gitignore` and `.dockerignore`.
 - Local-development auth bypass for Swagger UI testing through `AUTH_REQUIRED=false`.
 - Expanded health response with request, connection, header, and proxy details visible to the backend.
+- Production-safe auth behavior that prevents local bypass unless `ENVIRONMENT=local` or `ENVIRONMENT=test`.
+- Chat request normalization for Swagger's `"string"` conversation id placeholder.
 - Global structured logging system with JSON output in production and human-readable output in development.
 - `RequestLoggingMiddleware` that logs every HTTP request with method, path, status code, and duration.
 - Per-module loggers across all layers: routers, services, LLM providers, middleware, auth, and Supabase client.
@@ -43,6 +46,7 @@ All notable changes to Sirat Al Mustaqeem AI will be documented in this file.
 - Renamed frontend service documentation from `web.md` to `frontend.md`.
 - Updated backend docs for local auth behavior and detailed health responses.
 - Replaced the deprecated `google-generativeai` Gemini transport with the OpenAI-compatible Gemini endpoint through the OpenAI SDK.
+- Documented deployed Swagger testing requirements for auth and new chat requests.
 
 ### Removed
 

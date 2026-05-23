@@ -64,6 +64,13 @@ Local development defaults to `AUTH_REQUIRED=false` through `backend/.env.exampl
 
 If your Supabase tables enforce a foreign key to `auth.users`, set `LOCAL_DEV_USER_ID` to an existing Supabase user UUID.
 
+Deployed environments should set:
+
+- `ENVIRONMENT=production`
+- `AUTH_REQUIRED=true`
+
+The backend will not allow local auth bypass unless `ENVIRONMENT=local` or `ENVIRONMENT=test`.
+
 ## API Routes
 
 - `GET /health`: public health check with request/client details visible to the backend server.
@@ -73,6 +80,8 @@ If your Supabase tables enforce a foreign key to `auth.users`, set `LOCAL_DEV_US
 - `GET /chat/conversations/{conversation_id}/messages`: authenticated message history.
 - `DELETE /chat/conversations/{conversation_id}`: authenticated conversation delete.
 - `GET /admin/status`: authenticated placeholder admin route.
+
+For `POST /chat/stream`, omit `conversation_id` or set it to `null` when starting a new conversation. Swagger UI may show `"string"` as a placeholder; the backend normalizes that placeholder to `null`.
 
 ## Architecture Overview
 
@@ -90,13 +99,14 @@ If your Supabase tables enforce a foreign key to `auth.users`, set `LOCAL_DEV_US
 
 ## Local Auth Behavior
 
-Protected routes use `get_current_user`. When `AUTH_REQUIRED=false`, requests without a bearer token are treated as the configured local development user. If a bearer token is supplied, the backend still verifies it against Supabase.
+Protected routes use `get_current_user`. When `ENVIRONMENT=local` and `AUTH_REQUIRED=false`, requests without a bearer token are treated as the configured local development user. If a bearer token is supplied, the backend still verifies it against Supabase.
 
 For Supabase schemas with user foreign keys, `LOCAL_DEV_USER_ID` should be set to a real auth user UUID before testing conversation writes.
 
 Production and staging environments should set:
 
 ```text
+ENVIRONMENT=production
 AUTH_REQUIRED=true
 ```
 

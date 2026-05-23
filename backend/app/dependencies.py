@@ -17,7 +17,7 @@ BearerCredentials = Annotated[HTTPAuthorizationCredentials | None, Depends(beare
 async def get_current_user(credentials: BearerCredentials) -> AuthenticatedUser:
     settings = get_settings()
     if credentials is None:
-        if not settings.should_require_auth:
+        if settings.local_auth_bypass_enabled:
             logger.info(
                 "auth_bypassed | user_id=%s reason=local_dev",
                 settings.local_dev_user_id,

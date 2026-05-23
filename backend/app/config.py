@@ -11,7 +11,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    environment: str = Field(default="development", alias="ENVIRONMENT")
+    environment: str = Field(default="production", alias="ENVIRONMENT")
     api_title: str = Field(default="Sirat Al Mustaqeem AI API", alias="API_TITLE")
     api_version: str = Field(default="0.1.0", alias="API_VERSION")
     cors_origins_raw: str = Field(default="http://localhost:3000", alias="API_CORS_ORIGINS")
@@ -74,13 +74,17 @@ class Settings(BaseSettings):
 
     @property
     def is_local_environment(self) -> bool:
-        return self.environment.lower() in {"local", "dev", "development", "test"}
+        return self.environment.lower() in {"local", "test"}
 
     @property
     def should_require_auth(self) -> bool:
         if self.auth_required is not None:
-            return self.auth_required
+            return self.auth_required or not self.is_local_environment
         return not self.is_local_environment
+
+    @property
+    def local_auth_bypass_enabled(self) -> bool:
+        return self.auth_required is False and self.is_local_environment
 
     @property
     def supabase_base_url(self) -> str:

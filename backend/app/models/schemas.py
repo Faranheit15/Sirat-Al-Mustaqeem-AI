@@ -1,7 +1,7 @@
 from typing import Any, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 ChatRole = Literal["system", "user", "assistant"]
 LLMProviderName = Literal["groq", "gemini", "openrouter"]
@@ -42,8 +42,19 @@ class ChatMessage(BaseModel):
 class ChatStreamRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    conversation_id: str | None = None
+    conversation_id: str | None = Field(
+        default=None,
+        description="Existing conversation id. Omit or use null to start a new conversation.",
+        examples=[None],
+    )
     messages: list[ChatMessage] = Field(min_length=1)
+
+    @field_validator("conversation_id", mode="before")
+    @classmethod
+    def normalize_swagger_placeholder(cls, value: object) -> object:
+        if isinstance(value, str) and value.strip().lower() in {"", "string", "null", "none"}:
+            return None
+        return value
 
 
 class Conversation(BaseModel):

@@ -2,7 +2,7 @@
 name = "sirat-backend"
 version = "0.1.0"
 description = "FastAPI backend for Sirat Al Mustaqeem AI."
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.12"
 dependencies = [
   "fastapi[standard]>=0.115.6",
   "uvicorn[standard]>=0.34.0",
