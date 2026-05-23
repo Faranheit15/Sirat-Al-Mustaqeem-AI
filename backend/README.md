@@ -83,6 +83,25 @@ The backend will not allow local auth bypass unless `ENVIRONMENT=local` or `ENVI
 
 For `POST /chat/stream`, omit `conversation_id` or set it to `null` when starting a new conversation. Swagger UI may show `"string"` as a placeholder; the backend normalizes that placeholder to `null`.
 
+### SSE event format
+
+Each SSE response contains three event types:
+
+```
+event: delta
+data: {"content": "<token>", "provider": "groq"}
+
+event: done
+data: {"done": true, "provider": "groq", "conversation_id": "<uuid>"}
+
+event: error
+data: {"error": "<message>"}
+```
+
+### Provider failover
+
+Providers are tried in order: **Groq → Gemini → OpenRouter**. Before each attempt the router checks whether the cached rate-limit headers from the previous response on that provider show quota exhausted. On failure (429 or connection error) the router waits 1 s before the second provider and 2 s before the third.
+
 ## Architecture Overview
 
 - `app/main.py`: FastAPI app factory, lifespan, CORS, middleware, router includes.
@@ -92,6 +111,10 @@ For `POST /chat/stream`, omit `conversation_id` or set it to `null` when startin
 - `app/middleware/rate_limit.py`: in-memory sliding window limiter.
 - `app/routers`: HTTP route modules.
 - `app/services/llm`: OpenAI-compatible Groq, Gemini, OpenRouter, and provider failover.
+  - `prompts.py`: Islamic system prompt constant.
+  - `base.py`: `LLMProvider` protocol (`stream_chat`, `complete`, `check_rate_limit`).
+  - `openai_compatible.py`: shared implementation — streaming, non-streaming, rate-limit header caching, connection-error handling.
+  - `router.py`: `ProviderRouter` — quota pre-check, exponential back-off (1 s / 2 s / 4 s), failover across Groq → Gemini → OpenRouter.
 - `app/services/supabase.py`: async `httpx` wrapper for Supabase REST.
 - `app/services/conversation.py`: conversation and message CRUD.
 - `app/models/schemas.py`: Pydantic request/response models.

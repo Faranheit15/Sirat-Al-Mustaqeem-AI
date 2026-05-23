@@ -1,3 +1,4 @@
+import json
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from uuid import uuid4
@@ -57,7 +58,15 @@ async def chat_event_generator(
     try:
         async for delta in provider_router.stream_chat(request.messages):
             assistant_content = append_assistant_delta(assistant_content, delta)
-            yield {"event": "delta", "data": delta}
+            yield {
+                "event": "delta",
+                "data": json.dumps(
+                    {
+                        "content": delta,
+                        "provider": provider_router.last_provider_name,
+                    }
+                ),
+            }
 
         assistant_message = ChatMessage(
             id=str(uuid4()),
@@ -81,7 +90,16 @@ async def chat_event_generator(
             conversation_id,
             provider_router.last_provider_name,
         )
-        yield {"event": "done", "data": conversation_id or ""}
+        yield {
+            "event": "done",
+            "data": json.dumps(
+                {
+                    "done": True,
+                    "provider": provider_router.last_provider_name,
+                    "conversation_id": conversation_id,
+                }
+            ),
+        }
     except Exception as exc:
         logger.error(
             "sse_stream_error | user_id=%s conversation_id=%s error=%s",
@@ -89,7 +107,7 @@ async def chat_event_generator(
             request.conversation_id,
             exc,
         )
-        yield {"event": "error", "data": str(exc)}
+        yield {"event": "error", "data": json.dumps({"error": str(exc)})}
 
 
 def stream_chat_response(

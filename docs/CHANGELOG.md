@@ -6,6 +6,16 @@ All notable changes to Sirat Al Mustaqeem AI will be documented in this file.
 
 ### Added
 
+- `app/services/llm/prompts.py` — Islamic system prompt extracted into its own module; `router.py` now imports from it.
+- `complete()` non-streaming method and `check_rate_limit()` quota pre-check added to `LLMProvider` protocol and `OpenAICompatibleProvider`.
+- `extra_headers` field on `OpenAICompatibleProvider`; `OpenRouterProvider` passes the required `HTTP-Referer` and `X-Title` headers.
+- `APIConnectionError` is now caught and converted to `ProviderUnavailableError` so connection failures trigger the same failover path as rate limits.
+- Both `x-ratelimit-remaining-requests` and `x-ratelimit-remaining-tokens` headers are now parsed and stored per provider.
+- `ProviderRouter` skips providers whose cached quota is known-exhausted via `check_rate_limit()`, then applies exponential back-off (1 s → 2 s → 4 s) between retries.
+- Model name is logged at every `llm_attempt` and `llm_success` event.
+- SSE delta and done events now carry JSON payloads `{"content": "...", "provider": "groq"}` and `{"done": true, "provider": "groq", "conversation_id": "..."}`.
+- Model defaults corrected: `gemini-2.5-flash`, `meta-llama/llama-3.3-70b-instruct:free`.
+
 - Widened `requires-python` from `">=3.12,<3.13"` to `">=3.12"` and regenerated `uv.lock` to unblock FastAPI Cloud builds (build environment ships Python 3.13; the old strict upper bound caused uv to fail with `No such file or directory` when looking for `python3.12`).
 - GitHub Actions workflow `.github/workflows/backend.yml` for backend CI/CD: ruff lint, ruff format check, and mypy on every PR; deploy to FastAPI Cloud on every push to main (deploy job is gated on lint passing).
 - Fixed `backend/Dockerfile` to copy `uv.lock` alongside `pyproject.toml` and use `uv sync --frozen --no-dev` for reproducible production image builds.

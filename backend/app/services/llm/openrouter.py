@@ -13,4 +13,8 @@ class OpenRouterProvider(OpenAICompatibleProvider):
             model=model,
             api_key=api_key,
             base_url="https://openrouter.ai/api/v1",
+            extra_headers={
+                "HTTP-Referer": "https://sirat-al-mustaqeem.ai",
+                "X-Title": "Sirat Al Mustaqeem AI",
+            },
         )
