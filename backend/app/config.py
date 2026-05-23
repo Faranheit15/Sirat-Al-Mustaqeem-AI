@@ -49,10 +49,20 @@ class Settings(BaseSettings):
     http_timeout_seconds: int = Field(default=30, alias="HTTP_TIMEOUT_SECONDS")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
+    supabase_storage_bucket: str = Field(default="documents", alias="SUPABASE_STORAGE_BUCKET")
+    gemini_embedding_model: str = Field(
+        default="models/text-embedding-004",
+        alias="GEMINI_EMBEDDING_MODEL",
+    )
+    ingestion_chunk_size: int = Field(default=500, alias="INGESTION_CHUNK_SIZE")
+    ingestion_chunk_overlap: int = Field(default=50, alias="INGESTION_CHUNK_OVERLAP")
+
     @field_validator(
         "rate_limit_requests_per_minute",
         "jwks_cache_ttl_seconds",
         "http_timeout_seconds",
+        "ingestion_chunk_size",
+        "ingestion_chunk_overlap",
     )
     @classmethod
     def must_be_positive(cls, value: int) -> int:
@@ -100,6 +110,10 @@ class Settings(BaseSettings):
     @property
     def supabase_jwks_url(self) -> str:
         return f"{self.supabase_base_url}/auth/v1/.well-known/jwks.json"
+
+    @property
+    def supabase_storage_url(self) -> str:
+        return f"{self.supabase_base_url}/storage/v1"
 
     @property
     def supabase_jwt_issuer(self) -> str:

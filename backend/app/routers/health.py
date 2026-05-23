@@ -4,7 +4,8 @@ from fastapi import APIRouter, Request
 
 from app.config import get_settings
 from app.core.logging import get_logger
-from app.models.schemas import HealthData, HealthResponse
+from app.models.schemas import DbHealthData, DbHealthResponse, HealthData, HealthResponse
+from app.services.supabase import SupabaseClient
 
 logger = get_logger(__name__)
 
@@ -43,6 +44,23 @@ def build_client_details(request: Request) -> dict[str, Any]:
             "forwarded": request.headers.get("forwarded"),
         },
     }
+
+
+@router.get("/health/db", response_model=DbHealthResponse)
+async def db_health_check() -> DbHealthResponse:
+    settings = get_settings()
+    logger.debug("db_health_check")
+    supabase = SupabaseClient(settings=settings)
+    is_healthy, tables, error = await supabase.check_db()
+    return DbHealthResponse(
+        data=DbHealthData(
+            status="ok" if is_healthy else "error",
+            tables=tables,
+            error=error,
+        ),
+        error=error,
+        message="Database is reachable." if is_healthy else "Database check failed.",
+    )
 
 
 @router.get("/health", response_model=HealthResponse)

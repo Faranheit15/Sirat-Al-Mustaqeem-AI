@@ -6,6 +6,16 @@ All notable changes to Sirat Al Mustaqeem AI will be documented in this file.
 
 ### Added
 
+- Document ingestion pipeline: `app/services/ingestion/` package with `extractor.py` (PDF/DOCX/TXT extraction with optional pytesseract OCR for scanned PDFs), `chunker.py` (Islamic-aware chunking — Quran at ayah boundaries, hadith as full units, general semantic sliding-window), `embedder.py` (async Gemini `text-embedding-004` via REST batchEmbedContents), and `pipeline.py` (orchestrated extract→chunk→embed→store with per-step job status updates).
+- Admin document management routes replacing the placeholder in `app/routers/admin.py`: `POST /admin/documents/upload`, `GET /admin/documents`, `GET /admin/documents/{id}`, `DELETE /admin/documents/{id}`, `POST /admin/documents/{id}/reprocess`, `GET /admin/ingestion-jobs`. All routes require auth and admin/local_dev role.
+- File storage: raw uploads go to Supabase Storage bucket (`SUPABASE_STORAGE_BUCKET`); path stored in `documents.file_path`.
+- `GET /health/db` endpoint (no auth) that pings the Supabase REST API, returns DB status, discovered table names, and error details if unreachable — visible in Swagger UI.
+- New Pydantic schemas: `Document`, `IngestionJob`, `DocumentUploadData/Response`, `DocumentListData/Response`, `DocumentDetailData/Response`, `IngestionJobListData/Response`, `IngestionJobResponse`, `DbHealthData/Response`.
+- New `SupabaseClient` methods: `upload_file`, `delete_file`, `create_document`, `list_documents`, `count_documents`, `get_document`, `update_document`, `delete_document`, `insert_chunks` (batched 50/request), `delete_chunks`, `create_ingestion_job`, `update_ingestion_job`, `list_ingestion_jobs`, `get_ingestion_job_by_document`, `check_db`.
+- New dependencies: `pypdf`, `python-docx`, `pytesseract`, `chardet`, `google-generativeai`, `Pillow`.
+- New config fields: `SUPABASE_STORAGE_BUCKET`, `GEMINI_EMBEDDING_MODEL`, `INGESTION_CHUNK_SIZE`, `INGESTION_CHUNK_OVERLAP`.
+- mypy override for `pytesseract` (no `py.typed` marker) and `google.generativeai`.
+
 - `app/services/llm/prompts.py` — Islamic system prompt extracted into its own module; `router.py` now imports from it.
 - `complete()` non-streaming method and `check_rate_limit()` quota pre-check added to `LLMProvider` protocol and `OpenAICompatibleProvider`.
 - `extra_headers` field on `OpenAICompatibleProvider`; `OpenRouterProvider` passes the required `HTTP-Referer` and `X-Title` headers.

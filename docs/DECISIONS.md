@@ -32,6 +32,26 @@
 - **Decision:** Single workflow file `.github/workflows/backend.yml` with two jobs: `lint` (always) and `deploy` (main only, gated on lint)
 - **Reason:** Lint must pass before any deploy reaches production; PRs get CI feedback without triggering deploys; path filters prevent the workflow from running on frontend-only changes; `cancel-in-progress` is true only for PRs so production deploys are never interrupted by a following push
 
+## 2026-05-23: Embedding via Gemini REST API (not SDK)
+- **Context:** Need async embeddings for pgvector storage in the ingestion pipeline
+- **Decision:** Call `generativelanguage.googleapis.com/v1beta/{model}:batchEmbedContents` via httpx instead of using the `google-generativeai` SDK
+- **Reason:** The SDK's `embed_content` is synchronous — running it in an async FastAPI handler requires `run_in_executor`, adding thread-pool overhead. The REST call is natively async and produces identical results.
+
+## 2026-05-23: Ingestion in BackgroundTasks, not a job queue
+- **Context:** Need to run multi-step extract→chunk→embed→store pipeline without blocking the upload response
+- **Decision:** Use FastAPI's built-in `BackgroundTasks` for now; progress tracked in `ingestion_jobs` table
+- **Reason:** Simplicity — no Redis, Celery, or worker processes needed initially. Migrating later requires only swapping the `background_tasks.add_task(...)` call.
+
+## 2026-05-23: Islamic-aware text chunking
+- **Context:** Splitting Islamic texts naively (by character count) damages RAG quality
+- **Decision:** Auto-detect Quran vs hadith vs general prose, apply different chunking strategies per type; Quran splits at ayah boundaries, hadith kept as full units
+- **Reason:** Semantic integrity of the retrieved context is essential for accurate fatwa/citation responses. A split-ayah or isnad-without-matn would be meaningless to the LLM.
+
+## 2026-05-23: /health/db with no auth
+- **Context:** Need to verify DB connectivity from Swagger UI and uptime monitors
+- **Decision:** Endpoint returns status, table names, and full error text in the response body; no auth required
+- **Reason:** Auth would defeat the purpose. No sensitive data is exposed — only connection status and table names. Errors land in the response body so Swagger always shows the full message.
+
 ## Initial Platform Decisions (deprecated, ignore)
 
 - Use Turborepo for the monorepo so the web app, API service, and shared TypeScript packages can evolve together with cached task orchestration.

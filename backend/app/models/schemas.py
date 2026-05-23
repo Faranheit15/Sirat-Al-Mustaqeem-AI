@@ -112,3 +112,111 @@ class LLMProviderStatus(BaseModel):
     provider: LLMProviderName
     available: bool
     rate_limit_remaining: str | None = None
+
+
+# --- Document ingestion schemas ---
+
+DocumentStatus = Literal["pending", "processing", "completed", "failed"]
+IngestionJobStatus = Literal[
+    "pending", "extracting", "chunking", "embedding", "storing", "completed", "failed"
+]
+DocType = Literal["quran", "hadith", "general"]
+
+
+class Document(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    title: str
+    file_path: str | None = None
+    file_type: str
+    file_size: int | None = None
+    language: str | None = None
+    page_count: int | None = None
+    is_ocr: bool = False
+    status: str
+    chunk_count: int = 0
+    created_at: str | None = None
+    updated_at: str | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class IngestionJob(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    document_id: str
+    status: str
+    progress: int = 0
+    error_log: str | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
+    created_at: str | None = None
+
+
+class DocumentUploadData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    document: Document
+    job: IngestionJob
+
+
+class DocumentUploadResponse(ApiEnvelope):
+    data: DocumentUploadData
+
+
+class DocumentListData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    documents: list[Document]
+    total: int
+
+
+class DocumentListResponse(ApiEnvelope):
+    data: DocumentListData
+
+
+class DocumentDetailData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    document: Document
+
+
+class DocumentDetailResponse(ApiEnvelope):
+    data: DocumentDetailData
+
+
+class IngestionJobListData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    jobs: list[IngestionJob]
+    total: int
+
+
+class IngestionJobListResponse(ApiEnvelope):
+    data: IngestionJobListData
+
+
+class IngestionJobResponse(ApiEnvelope):
+    data: IngestionJob
+
+
+# --- DB health check schemas ---
+
+
+class DbTableInfo(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+
+
+class DbHealthData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["ok", "error"]
+    tables: list[str]
+    error: str | None = None
+
+
+class DbHealthResponse(ApiEnvelope):
+    data: DbHealthData

@@ -27,6 +27,60 @@ Health check:
 GET http://localhost:8000/health
 ```
 
+## Required Supabase Tables
+
+Run these SQL migrations in your Supabase project before using the ingestion routes:
+
+```sql
+-- Enable pgvector
+create extension if not exists vector;
+
+-- Documents table
+create table documents (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  file_path text,
+  file_type text not null,
+  file_size integer,
+  language text,
+  page_count integer,
+  is_ocr boolean default false,
+  status text not null default 'pending',
+  chunk_count integer default 0,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  metadata jsonb
+);
+
+-- Document chunks with pgvector embeddings
+create table document_chunks (
+  id uuid primary key default gen_random_uuid(),
+  document_id uuid references documents(id) on delete cascade,
+  chunk_index integer not null,
+  content text not null,
+  embedding vector(768),
+  doc_type text,
+  language text,
+  metadata jsonb,
+  created_at timestamptz default now()
+);
+create index on document_chunks using ivfflat (embedding vector_cosine_ops);
+
+-- Ingestion jobs
+create table ingestion_jobs (
+  id uuid primary key default gen_random_uuid(),
+  document_id uuid references documents(id) on delete cascade,
+  status text not null default 'pending',
+  progress integer default 0,
+  error_log text,
+  started_at timestamptz,
+  completed_at timestamptz,
+  created_at timestamptz default now()
+);
+```
+
+Also create a Supabase Storage bucket named `documents` (or the value of `SUPABASE_STORAGE_BUCKET`).
+
 ## Environment Variables
 
 Create `backend/.env` from `backend/.env.example`.
@@ -61,6 +115,13 @@ Runtime configuration:
 - `JWKS_CACHE_TTL_SECONDS`
 - `HTTP_TIMEOUT_SECONDS`
 
+Document ingestion configuration:
+
+- `SUPABASE_STORAGE_BUCKET` (default `documents`)
+- `GEMINI_EMBEDDING_MODEL` (default `models/text-embedding-004`)
+- `INGESTION_CHUNK_SIZE` (default `500` tokens)
+- `INGESTION_CHUNK_OVERLAP` (default `50` tokens)
+
 Protected routes require a Supabase bearer token. For local Swagger chat testing without a JWT, set `DEBUG=true` and use `POST /chat/stream/test`.
 
 Deployed environments should set:
@@ -74,6 +135,7 @@ The legacy local auth bypass is only available when `ENVIRONMENT=local` or `ENVI
 ## API Routes
 
 - `GET /health`: public health check with request/client details visible to the backend server.
+- `GET /health/db`: public DB connectivity check — returns Supabase status and table names; errors visible in Swagger UI.
 - `POST /chat/stream`: authenticated SSE chat stream.
 - `POST /chat/stream/test`: unauthenticated debug-only SSE chat stream.
 - `GET /chat/conversations`: authenticated conversation list.
@@ -81,7 +143,13 @@ The legacy local auth bypass is only available when `ENVIRONMENT=local` or `ENVI
 - `GET /chat/conversations/{conversation_id}`: authenticated conversation detail with messages.
 - `GET /chat/conversations/{conversation_id}/messages`: authenticated message history.
 - `DELETE /chat/conversations/{conversation_id}`: authenticated conversation delete.
-- `GET /admin/status`: authenticated placeholder admin route.
+- `POST /admin/documents/upload`: admin — upload PDF/DOCX/TXT (max 50 MB), queues ingestion job.
+- `GET /admin/documents`: admin — list all documents with status.
+- `GET /admin/documents/{id}`: admin — document detail with chunk count.
+- `DELETE /admin/documents/{id}`: admin — delete document, chunks, and stored file.
+- `POST /admin/documents/{id}/reprocess`: admin — re-run ingestion pipeline on existing file.
+- `GET /admin/ingestion-jobs`: admin — list all ingestion jobs with progress.
+- `GET /admin/status`: admin — admin health check.
 
 For `POST /chat/stream`, omit `conversation_id` or set it to `null` when starting a new conversation. Swagger UI may show `"string"` as a placeholder; the backend normalizes that placeholder to `null`.
 
@@ -185,6 +253,17 @@ If `POST /chat/stream` omits `conversation_id`, the backend auto-creates a conve
 - request headers with sensitive values redacted
 - common proxy headers such as `x-forwarded-for`
 
+## Document Ingestion
+
+Admin routes accept PDF, DOCX, and TXT files up to 50 MB. The pipeline runs in a FastAPI `BackgroundTasks` task with progress tracked in the `ingestion_jobs` table:
+
+1. **Extract** — `pypdf` for text PDFs; pytesseract OCR fallback for scanned PDFs (Arabic + Urdu + English); `python-docx` for DOCX; chardet encoding detection for TXT.
+2. **Chunk** — Islamic-aware: Quran text split at ayah boundaries, hadith kept as complete units (isnad + matn), general text chunked by token count with configurable overlap.
+3. **Embed** — Gemini `text-embedding-004` via the REST `batchEmbedContents` endpoint in batches of 100.
+4. **Store** — chunk rows with 768-dim pgvector embeddings written to `document_chunks`.
+
+For OCR of scanned PDFs, pytesseract must be installed along with the `tesseract-ocr` system binary and the `ara`, `urd`, and `eng` language packs.
+
 ## Current Scope
 
 Implemented now:
@@ -192,9 +271,10 @@ Implemented now:
 - Authenticated chat streaming directly to LLM providers.
 - Conversation and message persistence through Supabase REST.
 - Provider failover: Groq, then Gemini, then OpenRouter.
+- Document ingestion pipeline with admin management routes.
+- pgvector embeddings stored in Supabase for future RAG.
 
 Not implemented yet:
 
-- RAG/vector search.
-- Document ingestion.
-- Admin functionality beyond a protected placeholder.
+- RAG/vector search (embeddings are stored; query pipeline is next).
+- Admin functionality beyond document management.
