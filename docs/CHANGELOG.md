@@ -6,6 +6,9 @@ All notable changes to Sirat Al Mustaqeem AI will be documented in this file.
 
 ### Added
 
+- GitHub Actions workflow `.github/workflows/backend.yml` for backend CI/CD: ruff lint, ruff format check, and mypy on every PR; deploy to FastAPI Cloud on every push to main (deploy job is gated on lint passing).
+- Fixed `backend/Dockerfile` to copy `uv.lock` alongside `pyproject.toml` and use `uv sync --frozen --no-dev` for reproducible production image builds.
+
 - Independent FastAPI backend scaffold in `backend/` using Python 3.12 and uv.
 - Pydantic v2 settings module with typed environment variables and validation.
 - FastAPI app setup with lifespan, CORS, health, chat, and admin routers.

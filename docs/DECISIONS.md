@@ -27,6 +27,11 @@
 - **Decision:** Use Python's stdlib `logging` module with a custom JSON formatter for production and human-readable format for development
 - **Reason:** Zero new dependencies, works natively with container log drivers (CloudWatch, Datadog, GCP Logging), configurable via `LOG_LEVEL` env var, and all loggers inherit from a single `app` namespace
 
+## 2026-05-23: GitHub Actions for CI/CD to FastAPI Cloud
+- **Context:** Need automated deployment to FastAPI Cloud on every push to main
+- **Decision:** Single workflow file `.github/workflows/backend.yml` with two jobs: `lint` (always) and `deploy` (main only, gated on lint)
+- **Reason:** Lint must pass before any deploy reaches production; PRs get CI feedback without triggering deploys; path filters prevent the workflow from running on frontend-only changes; `cancel-in-progress` is true only for PRs so production deploys are never interrupted by a following push
+
 ## Initial Platform Decisions (deprecated, ignore)
 
 - Use Turborepo for the monorepo so the web app, API service, and shared TypeScript packages can evolve together with cached task orchestration.

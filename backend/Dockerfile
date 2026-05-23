@@ -8,9 +8,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /code
 
 COPY --from=ghcr.io/astral-sh/uv:0.5.31 /uv /usr/local/bin/uv
-COPY pyproject.toml ./
+COPY pyproject.toml uv.lock ./
 
-RUN uv sync --no-dev
+RUN uv sync --frozen --no-dev
 
 COPY app ./app
 
