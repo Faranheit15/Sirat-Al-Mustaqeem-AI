@@ -4,8 +4,11 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import get_settings
+from app.core.logging import get_logger
 from app.middleware.auth import AuthenticatedUser, verify_supabase_jwt
 from app.services.supabase import SupabaseClient, get_supabase_client
+
+logger = get_logger(__name__)
 
 bearer_scheme = HTTPBearer(auto_error=False)
 BearerCredentials = Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)]
@@ -15,6 +18,10 @@ async def get_current_user(credentials: BearerCredentials) -> AuthenticatedUser:
     settings = get_settings()
     if credentials is None:
         if not settings.should_require_auth:
+            logger.info(
+                "auth_bypassed | user_id=%s reason=local_dev",
+                settings.local_dev_user_id,
+            )
             return AuthenticatedUser(
                 user_id=settings.local_dev_user_id,
                 email=settings.local_dev_user_email,

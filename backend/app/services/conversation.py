@@ -2,8 +2,11 @@ from typing import Annotated
 
 from fastapi import Depends
 
+from app.core.logging import get_logger
 from app.models.schemas import ChatMessage, Conversation
 from app.services.supabase import SupabaseClient, get_supabase_client
+
+logger = get_logger(__name__)
 
 
 class ConversationService:
@@ -18,10 +21,21 @@ class ConversationService:
         row = await self.supabase.create_conversation(user_id=user_id, title=title)
         if row is None:
             raise RuntimeError("Supabase did not return the created conversation.")
-        return Conversation.model_validate(row)
+        conversation = Conversation.model_validate(row)
+        logger.info(
+            "conversation_created | user_id=%s conversation_id=%s",
+            user_id,
+            conversation.id,
+        )
+        return conversation
 
     async def delete_conversation(self, user_id: str, conversation_id: str) -> None:
         await self.supabase.delete_conversation(user_id=user_id, conversation_id=conversation_id)
+        logger.info(
+            "conversation_deleted | user_id=%s conversation_id=%s",
+            user_id,
+            conversation_id,
+        )
 
     async def list_messages(self, user_id: str, conversation_id: str) -> list[ChatMessage]:
         rows = await self.supabase.list_messages(user_id=user_id, conversation_id=conversation_id)
@@ -44,6 +58,10 @@ class ConversationService:
 
         await self.supabase.insert_message(resolved_conversation_id, user_message)
         await self.supabase.insert_message(resolved_conversation_id, assistant_message)
+        logger.debug(
+            "exchange_saved | conversation_id=%s",
+            resolved_conversation_id,
+        )
         return resolved_conversation_id
 
 

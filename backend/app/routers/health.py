@@ -3,7 +3,10 @@ from typing import Any
 from fastapi import APIRouter, Request
 
 from app.config import get_settings
+from app.core.logging import get_logger
 from app.models.schemas import HealthData, HealthResponse
+
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["health"])
 SENSITIVE_HEADER_NAMES = {"authorization", "cookie", "set-cookie", "x-api-key", "apikey"}
@@ -45,6 +48,7 @@ def build_client_details(request: Request) -> dict[str, Any]:
 @router.get("/health", response_model=HealthResponse)
 async def health_check(request: Request) -> HealthResponse:
     settings = get_settings()
+    logger.debug("health_check | environment=%s", settings.environment)
     return HealthResponse(
         data=HealthData(
             status="ok",

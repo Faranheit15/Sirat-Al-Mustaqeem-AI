@@ -4,9 +4,12 @@ from uuid import uuid4
 
 from sse_starlette.sse import EventSourceResponse
 
+from app.core.logging import get_logger
 from app.models.schemas import ChatMessage, ChatStreamRequest
 from app.services.conversation import ConversationService
 from app.services.llm.router import ProviderRouter
+
+logger = get_logger(__name__)
 
 
 def _is_word_like(character: str) -> bool:
@@ -45,6 +48,12 @@ async def chat_event_generator(
 ) -> AsyncIterator[dict[str, str]]:
     assistant_content = ""
 
+    logger.info(
+        "sse_stream_start | user_id=%s conversation_id=%s",
+        user_id,
+        request.conversation_id,
+    )
+
     try:
         async for delta in provider_router.stream_chat(request.messages):
             assistant_content = append_assistant_delta(assistant_content, delta)
@@ -66,8 +75,20 @@ async def chat_event_generator(
             user_message=user_message,
             assistant_message=assistant_message,
         )
+        logger.info(
+            "sse_stream_done | user_id=%s conversation_id=%s provider=%s",
+            user_id,
+            conversation_id,
+            provider_router.last_provider_name,
+        )
         yield {"event": "done", "data": conversation_id or ""}
     except Exception as exc:
+        logger.error(
+            "sse_stream_error | user_id=%s conversation_id=%s error=%s",
+            user_id,
+            request.conversation_id,
+            exc,
+        )
         yield {"event": "error", "data": str(exc)}
 
 

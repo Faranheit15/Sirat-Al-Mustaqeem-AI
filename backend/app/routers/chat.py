@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Response, status
 from sse_starlette.sse import EventSourceResponse
 
+from app.core.logging import get_logger
 from app.dependencies import get_current_user
 from app.middleware.auth import AuthenticatedUser
 from app.models.schemas import (
@@ -18,6 +19,8 @@ from app.services.conversation import ConversationService, get_conversation_serv
 from app.services.llm.router import ProviderRouter, get_provider_router
 from app.utils.streaming import stream_chat_response
 
+logger = get_logger(__name__)
+
 router = APIRouter(prefix="/chat", tags=["chat"])
 CurrentUser = Annotated[AuthenticatedUser, Depends(get_current_user)]
 ConversationDependency = Annotated[ConversationService, Depends(get_conversation_service)]
@@ -31,6 +34,12 @@ async def stream_chat(
     llm_router: ProviderRouterDependency,
     conversations: ConversationDependency,
 ) -> EventSourceResponse:
+    logger.info(
+        "chat_stream | user_id=%s conversation_id=%s message_count=%d",
+        current_user.user_id,
+        payload.conversation_id,
+        len(payload.messages),
+    )
     return stream_chat_response(
         request=payload,
         user_id=current_user.user_id,
@@ -44,6 +53,7 @@ async def list_conversations(
     current_user: CurrentUser,
     conversations: ConversationDependency,
 ) -> ConversationListResponse:
+    logger.info("list_conversations | user_id=%s", current_user.user_id)
     items = await conversations.list_conversations(user_id=current_user.user_id)
     return ConversationListResponse(
         data=ConversationListData(conversations=items),
@@ -62,6 +72,7 @@ async def create_conversation(
     current_user: CurrentUser,
     conversations: ConversationDependency,
 ) -> ConversationResponse:
+    logger.info("create_conversation | user_id=%s", current_user.user_id)
     conversation = await conversations.create_conversation(
         user_id=current_user.user_id,
         title=payload.title,
@@ -78,6 +89,11 @@ async def list_conversation_messages(
     current_user: CurrentUser,
     conversations: ConversationDependency,
 ) -> ConversationMessagesResponse:
+    logger.info(
+        "list_messages | user_id=%s conversation_id=%s",
+        current_user.user_id,
+        conversation_id,
+    )
     messages = await conversations.list_messages(
         user_id=current_user.user_id,
         conversation_id=conversation_id,
@@ -95,6 +111,11 @@ async def delete_conversation(
     current_user: CurrentUser,
     conversations: ConversationDependency,
 ) -> Response:
+    logger.info(
+        "delete_conversation | user_id=%s conversation_id=%s",
+        current_user.user_id,
+        conversation_id,
+    )
     await conversations.delete_conversation(
         user_id=current_user.user_id,
         conversation_id=conversation_id,

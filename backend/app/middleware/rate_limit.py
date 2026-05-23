@@ -7,6 +7,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 WINDOW_SECONDS = 60
 
 
@@ -58,6 +62,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         allowed, retry_after = self.limiter.check(key)
         if not allowed:
+            logger.warning(
+                "rate_limited | path=%s retry_after=%ss",
+                request.url.path,
+                retry_after,
+            )
             return JSONResponse(
                 status_code=429,
                 content={"data": None, "error": "Rate limit exceeded.", "message": None},

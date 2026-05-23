@@ -4,7 +4,10 @@ import httpx
 from fastapi import Depends
 
 from app.config import Settings, get_settings
+from app.core.logging import get_logger
 from app.models.schemas import ChatMessage
+
+logger = get_logger(__name__)
 
 
 class SupabaseClient:
@@ -34,15 +37,27 @@ class SupabaseClient:
         if prefer is not None:
             headers["Prefer"] = prefer
 
+        url = f"{self.settings.supabase_rest_url}{path}"
+        logger.debug("supabase_request | method=%s path=%s", method, path)
+
         async with httpx.AsyncClient(timeout=self.settings.http_timeout_seconds) as client:
-            response = await client.request(
-                method,
-                f"{self.settings.supabase_rest_url}{path}",
-                params=params,
-                json=json_body,
-                headers=headers,
-            )
-            response.raise_for_status()
+            try:
+                response = await client.request(
+                    method,
+                    url,
+                    params=params,
+                    json=json_body,
+                    headers=headers,
+                )
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                logger.error(
+                    "supabase_error | method=%s path=%s status=%s",
+                    method,
+                    path,
+                    exc.response.status_code,
+                )
+                raise
             if response.status_code == 204 or not response.content:
                 return None
             return response.json()

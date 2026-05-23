@@ -2,11 +2,14 @@ from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 
 from app.config import Settings, get_settings
+from app.core.logging import get_logger
 from app.models.schemas import ChatMessage
 from app.services.llm.base import LLMProvider, ProviderRateLimitError, ProviderUnavailableError
 from app.services.llm.gemini import GeminiProvider
 from app.services.llm.groq import GroqProvider
 from app.services.llm.openrouter import OpenRouterProvider
+
+logger = get_logger(__name__)
 
 SYSTEM_PROMPT = "\n".join(
     [
@@ -72,15 +75,27 @@ class ProviderRouter:
         for provider in self.providers:
             try:
                 self.last_provider_name = provider.name
+                logger.info("llm_attempt | provider=%s", provider.name)
                 async for delta in provider.stream_chat(prompted_messages):
                     yield delta
                 self.rate_limits[provider.name] = provider.rate_limit_remaining
+                logger.debug(
+                    "llm_success | provider=%s rate_limit_remaining=%s",
+                    provider.name,
+                    provider.rate_limit_remaining,
+                )
                 return
             except (ProviderRateLimitError, ProviderUnavailableError) as exc:
                 self.rate_limits[provider.name] = provider.rate_limit_remaining
                 errors.append(str(exc))
+                logger.warning(
+                    "llm_failover | provider=%s reason=%s",
+                    provider.name,
+                    exc,
+                )
                 continue
 
+        logger.error("llm_all_failed | errors=%s", " | ".join(errors))
         raise ProviderUnavailableError("All LLM providers failed: " + " | ".join(errors))
 
 

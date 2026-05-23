@@ -22,6 +22,11 @@
 - **Decision:** Groq primary → Gemini fallback → OpenRouter tertiary
 - **Reason:** Combined free tiers give ~16K+ requests/day
 
+## 2026-05-23: Stdlib logging with JSON formatter
+- **Context:** Need global logging for auditing and debugging post-deployment
+- **Decision:** Use Python's stdlib `logging` module with a custom JSON formatter for production and human-readable format for development
+- **Reason:** Zero new dependencies, works natively with container log drivers (CloudWatch, Datadog, GCP Logging), configurable via `LOG_LEVEL` env var, and all loggers inherit from a single `app` namespace
+
 ## Initial Platform Decisions (deprecated, ignore)
 
 - Use Turborepo for the monorepo so the web app, API service, and shared TypeScript packages can evolve together with cached task orchestration.

@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     rate_limit_requests_per_minute: int = Field(default=20, alias="RATE_LIMIT_REQUESTS_PER_MINUTE")
     jwks_cache_ttl_seconds: int = Field(default=3600, alias="JWKS_CACHE_TTL_SECONDS")
     http_timeout_seconds: int = Field(default=30, alias="HTTP_TIMEOUT_SECONDS")
+    log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
     @field_validator(
         "rate_limit_requests_per_minute",
@@ -57,6 +58,15 @@ class Settings(BaseSettings):
         if value < 1:
             raise ValueError("value must be positive")
         return value
+
+    @field_validator("log_level")
+    @classmethod
+    def must_be_valid_log_level(cls, value: str) -> str:
+        allowed = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+        normalised = value.upper()
+        if normalised not in allowed:
+            raise ValueError(f"log_level must be one of {allowed}, got '{value}'")
+        return normalised
 
     @property
     def cors_origins(self) -> list[str]:

@@ -25,6 +25,11 @@ All notable changes to Sirat Al Mustaqeem AI will be documented in this file.
 - Backend `.gitignore` and `.dockerignore`.
 - Local-development auth bypass for Swagger UI testing through `AUTH_REQUIRED=false`.
 - Expanded health response with request, connection, header, and proxy details visible to the backend.
+- Global structured logging system with JSON output in production and human-readable output in development.
+- `RequestLoggingMiddleware` that logs every HTTP request with method, path, status code, and duration.
+- Per-module loggers across all layers: routers, services, LLM providers, middleware, auth, and Supabase client.
+- Configurable `LOG_LEVEL` environment variable (default `INFO`) with runtime validation.
+- Security-aware logging that never exposes API keys, tokens, user emails, or message contents.
 
 ### Changed
 
