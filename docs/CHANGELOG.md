@@ -34,6 +34,7 @@ All notable changes to Sirat Al Mustaqeem AI will be documented in this file.
 - Updated agent guide files to reference app READMEs for `backend/`, `frontend/`, and `mobile/`.
 - Renamed frontend service documentation from `web.md` to `frontend.md`.
 - Updated backend docs for local auth behavior and detailed health responses.
+- Replaced the deprecated `google-generativeai` Gemini transport with the OpenAI-compatible Gemini endpoint through the OpenAI SDK.
 
 ### Removed
 

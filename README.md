@@ -23,6 +23,7 @@ Backend:
 - httpx for async HTTP
 - PyJWT and cryptography for Supabase JWT verification
 - Supabase Auth and Supabase REST
+- OpenAI SDK for OpenAI-compatible LLM providers
 - Groq as primary LLM provider
 - Gemini as fallback LLM provider
 - OpenRouter as tertiary LLM provider

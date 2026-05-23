@@ -89,8 +89,9 @@ This is intentionally simple for local development and Swagger UI testing. Redis
 Provider files live under `backend/app/services/llm`:
 
 - `base.py`: provider protocol and shared exceptions.
+- `openai_compatible.py`: shared OpenAI-compatible streaming transport.
 - `groq.py`: Groq through the OpenAI-compatible async SDK.
-- `gemini.py`: Gemini through `google-generativeai`.
+- `gemini.py`: Gemini through the OpenAI-compatible async SDK.
 - `openrouter.py`: OpenRouter through the OpenAI-compatible async SDK.
 - `router.py`: provider orchestration and failover.
 

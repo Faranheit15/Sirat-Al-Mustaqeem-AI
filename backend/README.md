@@ -82,7 +82,7 @@ If your Supabase tables enforce a foreign key to `auth.users`, set `LOCAL_DEV_US
 - `app/middleware/auth.py`: Supabase JWT verification with cached JWKS.
 - `app/middleware/rate_limit.py`: in-memory sliding window limiter.
 - `app/routers`: HTTP route modules.
-- `app/services/llm`: Groq, Gemini, OpenRouter, and provider failover.
+- `app/services/llm`: OpenAI-compatible Groq, Gemini, OpenRouter, and provider failover.
 - `app/services/supabase.py`: async `httpx` wrapper for Supabase REST.
 - `app/services/conversation.py`: conversation and message CRUD.
 - `app/models/schemas.py`: Pydantic request/response models.
