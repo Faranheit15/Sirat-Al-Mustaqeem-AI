@@ -40,7 +40,7 @@ _CONTENT_TYPES: dict[str, str] = {
 }
 
 
-def _require_admin(current_user: UserContext) -> UserContext:
+def _require_admin(current_user: CurrentUser) -> UserContext:
     if current_user.role not in {"admin", "local_dev"}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
