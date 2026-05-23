@@ -36,6 +36,7 @@ class ChatMessage(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     role: ChatRole
     content: str = Field(min_length=1)
+    citations: list[dict[str, Any]] | None = None
     created_at: str | None = None
 
 
@@ -67,6 +68,10 @@ class Conversation(BaseModel):
     updated_at: str | None = None
 
 
+class ConversationWithMessages(Conversation):
+    messages: list[ChatMessage] = Field(default_factory=list)
+
+
 class ConversationListData(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -90,11 +95,15 @@ class ConversationMessagesResponse(ApiEnvelope):
 class CreateConversationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    title: str = Field(min_length=1, max_length=120)
+    title: str | None = Field(default=None, min_length=1, max_length=120)
 
 
 class ConversationResponse(ApiEnvelope):
     data: Conversation
+
+
+class ConversationDetailResponse(ApiEnvelope):
+    data: ConversationWithMessages
 
 
 class LLMProviderStatus(BaseModel):

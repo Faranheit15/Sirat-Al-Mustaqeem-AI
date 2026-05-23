@@ -1,17 +1,20 @@
 import time
 from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable, Iterable
-from typing import Any
+from typing import Annotated, Any
 
+from fastapi import Depends, HTTPException, status
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from app.core.logging import get_logger
+from app.middleware.auth import UserContext, get_current_user
 
 logger = get_logger(__name__)
 
 WINDOW_SECONDS = 60
+DEFAULT_REQUESTS_PER_MINUTE = 30
 
 
 class SlidingWindowRateLimiter:
@@ -74,3 +77,23 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             )
 
         return await call_next(request)
+
+
+dependency_limiter = SlidingWindowRateLimiter(limit=DEFAULT_REQUESTS_PER_MINUTE)
+CurrentUser = Annotated[UserContext, Depends(get_current_user)]
+
+
+async def check_rate_limit(user: CurrentUser) -> UserContext:
+    allowed, retry_after = dependency_limiter.check(user.user_id)
+    if not allowed:
+        logger.warning(
+            "rate_limited | user_id=%s retry_after=%ss",
+            user.user_id,
+            retry_after,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    return user

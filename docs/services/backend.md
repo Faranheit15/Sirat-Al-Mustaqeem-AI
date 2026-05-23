@@ -10,9 +10,10 @@ Implemented:
 - Public health check.
 - Supabase JWT verification using PyJWT and cached JWKS.
 - Local-development auth bypass for Swagger UI testing.
-- In-memory sliding-window rate limiting for chat routes.
+- Dependency-based in-memory sliding-window rate limiting keyed by user id.
 - Conversation and message CRUD through Supabase REST.
 - SSE chat streaming directly to the configured LLM providers.
+- Debug-only unauthenticated chat streaming route for local Swagger testing.
 - LLM provider failover: Groq, then Gemini, then OpenRouter.
 - Dockerfile for the backend service.
 - Swagger UI testing through FastAPI docs.
@@ -51,8 +52,10 @@ Routes should validate inputs with Pydantic models, delegate business logic to s
 
 - `GET /health`: public health check with request/client details.
 - `POST /chat/stream`: authenticated SSE chat stream.
+- `POST /chat/stream/test`: unauthenticated debug-only SSE chat stream.
 - `GET /chat/conversations`: authenticated conversation list.
 - `POST /chat/conversations`: authenticated conversation create.
+- `GET /chat/conversations/{conversation_id}`: authenticated conversation detail with messages.
 - `GET /chat/conversations/{conversation_id}/messages`: authenticated message history.
 - `DELETE /chat/conversations/{conversation_id}`: authenticated conversation delete.
 - `GET /admin/status`: authenticated placeholder admin status route.
@@ -61,7 +64,13 @@ Routes should validate inputs with Pydantic models, delegate business logic to s
 
 `backend/app/middleware/auth.py` verifies Supabase access tokens using the Supabase JWKS endpoint. JWKS responses are cached for one hour by default and both RSA (`RS256`) and elliptic-curve (`ES256`) keys are supported.
 
-Authenticated routes should use `get_current_user` from `backend/app/dependencies.py`. The dependency returns a typed user object derived from JWT claims.
+Authenticated routes should use `get_current_user` from `backend/app/middleware/auth.py` or its compatibility re-export in `backend/app/dependencies.py`. The dependency returns `UserContext(user_id, email, role, claims)`.
+
+Role resolution order:
+
+1. JWT `app_metadata.role` or `user_metadata.role`.
+2. `profiles.role` from Supabase REST.
+3. Default `user`.
 
 For local Swagger UI testing, `AUTH_REQUIRED=false` allows protected routes to run without a bearer token. Requests without a token use `LOCAL_DEV_USER_ID` and `LOCAL_DEV_USER_EMAIL` as the authenticated user. If a bearer token is supplied, it is still verified normally.
 
@@ -88,7 +97,11 @@ When starting a new chat through Swagger, omit `conversation_id` or send `null`.
 
 ## Rate Limiting
 
-`backend/app/middleware/rate_limit.py` applies an in-memory sliding-window limiter to chat routes. The default limit is configured by `RATE_LIMIT_REQUESTS_PER_MINUTE`.
+`backend/app/middleware/rate_limit.py` exposes `check_rate_limit`, a FastAPI dependency that applies an in-memory sliding-window limiter keyed by authenticated `user_id`.
+
+- Limit: 30 requests per minute per user.
+- Response: `429 Too Many Requests`.
+- Header: `Retry-After`.
 
 This is intentionally simple for local development and Swagger UI testing. Redis or another distributed limiter should replace it before multi-instance production deployment.
 
@@ -114,6 +127,16 @@ Provider failures and rate-limit failures fall through to the next configured pr
 ## Persistence
 
 The backend currently uses Supabase REST through `backend/app/services/supabase.py` instead of direct SQLAlchemy models. Conversation workflows are coordinated by `backend/app/services/conversation.py`.
+
+Supported operations:
+
+- `create_conversation(user_id, title?)`
+- `get_conversations(user_id, limit=20, offset=0)`
+- `get_conversation(conversation_id, user_id)`
+- `delete_conversation(conversation_id, user_id)`
+- `add_message(conversation_id, role, content, citations?)`
+
+When `POST /chat/stream` omits `conversation_id`, the backend creates a conversation automatically and uses the LLM to summarize the first user message into a title of five words or fewer.
 
 Expected Supabase tables:
 

@@ -84,6 +84,65 @@ class ProviderRouter:
         logger.error("llm_all_failed | errors=%s", " | ".join(errors))
         raise ProviderUnavailableError("All LLM providers failed: " + " | ".join(errors))
 
+    async def complete(self, messages: Sequence[ChatMessage]) -> str:
+        errors: list[str] = []
+        retry_count = 0
+        retry_delay = _INITIAL_RETRY_DELAY
+
+        for provider in self.providers:
+            if not provider.check_rate_limit():
+                logger.info(
+                    "provider_skipped | provider=%s reason=rate_limit_cache",
+                    provider.name,
+                )
+                continue
+
+            if retry_count > 0:
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 2
+
+            try:
+                self.last_provider_name = provider.name
+                logger.info(
+                    "llm_complete_attempt | provider=%s model=%s",
+                    provider.name,
+                    provider.model,
+                )
+                content = await provider.complete(messages)
+                self.rate_limits[provider.name] = provider.rate_limit_remaining
+                logger.info("llm_complete_success | provider=%s", provider.name)
+                return content
+            except (ProviderRateLimitError, ProviderUnavailableError) as exc:
+                self.rate_limits[provider.name] = provider.rate_limit_remaining
+                errors.append(str(exc))
+                retry_count += 1
+                logger.warning(
+                    "llm_complete_failover | provider=%s model=%s reason=%s",
+                    provider.name,
+                    provider.model,
+                    exc,
+                )
+                continue
+
+        logger.error("llm_complete_all_failed | errors=%s", " | ".join(errors))
+        raise ProviderUnavailableError("All LLM providers failed: " + " | ".join(errors))
+
+    async def generate_title(self, first_message: str) -> str:
+        title = await self.complete(
+            [
+                ChatMessage(
+                    role="system",
+                    content=(
+                        "Summarize the user's chat topic as a short conversation title. "
+                        "Return only the title, maximum five words."
+                    ),
+                ),
+                ChatMessage(role="user", content=first_message[:1000]),
+            ]
+        )
+        cleaned = title.strip().strip('"').strip("'")
+        return cleaned[:80] or first_message[:80] or "New conversation"
+
 
 def create_provider_router(settings: Settings) -> ProviderRouter:
     return ProviderRouter(

@@ -1,13 +1,15 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sse_starlette.sse import EventSourceResponse
 
+from app.config import get_settings
 from app.core.logging import get_logger
-from app.dependencies import get_current_user
-from app.middleware.auth import AuthenticatedUser
+from app.middleware.auth import UserContext
+from app.middleware.rate_limit import check_rate_limit
 from app.models.schemas import (
     ChatStreamRequest,
+    ConversationDetailResponse,
     ConversationListData,
     ConversationListResponse,
     ConversationMessagesData,
@@ -22,7 +24,7 @@ from app.utils.streaming import stream_chat_response
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
-CurrentUser = Annotated[AuthenticatedUser, Depends(get_current_user)]
+CurrentUser = Annotated[UserContext, Depends(check_rate_limit)]
 ConversationDependency = Annotated[ConversationService, Depends(get_conversation_service)]
 ProviderRouterDependency = Annotated[ProviderRouter, Depends(get_provider_router)]
 
@@ -48,13 +50,43 @@ async def stream_chat(
     )
 
 
+@router.post("/stream/test", response_class=EventSourceResponse)
+async def stream_chat_test(
+    payload: ChatStreamRequest,
+    llm_router: ProviderRouterDependency,
+    conversations: ConversationDependency,
+) -> EventSourceResponse:
+    settings = get_settings()
+    if not settings.debug:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found.")
+
+    logger.info(
+        "chat_stream_test | user_id=%s conversation_id=%s message_count=%d",
+        settings.local_dev_user_id,
+        payload.conversation_id,
+        len(payload.messages),
+    )
+    return stream_chat_response(
+        request=payload,
+        user_id=settings.local_dev_user_id,
+        provider_router=llm_router,
+        conversations=conversations,
+    )
+
+
 @router.get("/conversations", response_model=ConversationListResponse)
 async def list_conversations(
     current_user: CurrentUser,
     conversations: ConversationDependency,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ) -> ConversationListResponse:
     logger.info("list_conversations | user_id=%s", current_user.user_id)
-    items = await conversations.list_conversations(user_id=current_user.user_id)
+    items = await conversations.get_conversations(
+        user_id=current_user.user_id,
+        limit=limit,
+        offset=offset,
+    )
     return ConversationListResponse(
         data=ConversationListData(conversations=items),
         error=None,
@@ -78,6 +110,33 @@ async def create_conversation(
         title=payload.title,
     )
     return ConversationResponse(data=conversation, error=None, message="Conversation created.")
+
+
+@router.get(
+    "/conversations/{conversation_id}",
+    response_model=ConversationDetailResponse,
+)
+async def get_conversation(
+    conversation_id: str,
+    current_user: CurrentUser,
+    conversations: ConversationDependency,
+) -> ConversationDetailResponse:
+    logger.info(
+        "get_conversation | user_id=%s conversation_id=%s",
+        current_user.user_id,
+        conversation_id,
+    )
+    try:
+        conversation = await conversations.get_conversation(
+            user_id=current_user.user_id,
+            conversation_id=conversation_id,
+        )
+    except LookupError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found.",
+        ) from exc
+    return ConversationDetailResponse(data=conversation, error=None, message=None)
 
 
 @router.get(

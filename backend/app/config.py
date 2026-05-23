@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     )
 
     environment: str = Field(default="production", alias="ENVIRONMENT")
+    debug: bool = Field(default=False, alias="DEBUG")
     api_title: str = Field(default="Sirat Al Mustaqeem AI API", alias="API_TITLE")
     api_version: str = Field(default="0.1.0", alias="API_VERSION")
     cors_origins_raw: str = Field(default="http://localhost:3000", alias="API_CORS_ORIGINS")
@@ -43,7 +44,7 @@ class Settings(BaseSettings):
         alias="OPENROUTER_MODEL",
     )
 
-    rate_limit_requests_per_minute: int = Field(default=20, alias="RATE_LIMIT_REQUESTS_PER_MINUTE")
+    rate_limit_requests_per_minute: int = Field(default=30, alias="RATE_LIMIT_REQUESTS_PER_MINUTE")
     jwks_cache_ttl_seconds: int = Field(default=3600, alias="JWKS_CACHE_TTL_SECONDS")
     http_timeout_seconds: int = Field(default=30, alias="HTTP_TIMEOUT_SECONDS")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")

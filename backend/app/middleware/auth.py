@@ -1,26 +1,33 @@
 import json
 import time
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Annotated, Any, cast
 
 import httpx
 import jwt
+from fastapi import Depends, Header, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import get_settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 @dataclass(frozen=True)
-class AuthenticatedUser:
+class UserContext:
     user_id: str
     email: str | None
+    role: str
     claims: dict[str, Any]
 
 
+AuthenticatedUser = UserContext
+
 _jwks_cache: dict[str, Any] | None = None
 _jwks_cache_expires_at = 0.0
+_role_cache: dict[str, tuple[str, float]] = {}
 
 
 async def get_supabase_jwks() -> dict[str, Any]:
@@ -43,7 +50,60 @@ async def get_supabase_jwks() -> dict[str, Any]:
     return jwks
 
 
-async def verify_supabase_jwt(token: str) -> AuthenticatedUser:
+def _role_from_claims(claims: dict[str, Any]) -> str | None:
+    for container_name in ("app_metadata", "user_metadata"):
+        container = claims.get(container_name)
+        if isinstance(container, dict):
+            role = container.get("role")
+            if isinstance(role, str) and role:
+                return role
+
+    role = claims.get("role")
+    if isinstance(role, str) and role not in {"anon", "authenticated"}:
+        return role
+    return None
+
+
+async def _fetch_profile_role(user_id: str) -> str | None:
+    settings = get_settings()
+    if settings.supabase_service_role_key is None or settings.supabase_url is None:
+        return None
+
+    now = time.monotonic()
+    cached = _role_cache.get(user_id)
+    if cached is not None and now < cached[1]:
+        return cached[0]
+
+    key = settings.supabase_service_role_key.get_secret_value()
+    headers = {"apikey": key, "Authorization": f"Bearer {key}"}
+
+    async with httpx.AsyncClient(timeout=settings.http_timeout_seconds) as client:
+        for column in ("user_id", "id"):
+            response = await client.get(
+                f"{settings.supabase_rest_url}/profiles",
+                params={"select": "role", column: f"eq.{user_id}", "limit": "1"},
+                headers=headers,
+            )
+            if response.status_code >= 400:
+                logger.debug(
+                    "profile_role_lookup_failed | user_id=%s column=%s status=%s",
+                    user_id,
+                    column,
+                    response.status_code,
+                )
+                continue
+
+            rows = response.json()
+            if isinstance(rows, list) and rows and isinstance(rows[0], dict):
+                role = rows[0].get("role")
+                if isinstance(role, str) and role:
+                    _role_cache[user_id] = (role, now + 300)
+                    return role
+
+    return None
+
+
+async def verify_supabase_jwt(token: str) -> UserContext:
     settings = get_settings()
 
     try:
@@ -92,8 +152,62 @@ async def verify_supabase_jwt(token: str) -> AuthenticatedUser:
 
     logger.info("jwt_authenticated | user_id=%s", subject)
     email = claims.get("email")
-    return AuthenticatedUser(
+    role = _role_from_claims(claims) or await _fetch_profile_role(subject) or "user"
+    return UserContext(
         user_id=subject,
         email=email if isinstance(email, str) else None,
+        role=role,
         claims=claims,
     )
+
+
+async def get_current_user_from_authorization(
+    authorization: str | None = Header(default=None),
+) -> UserContext:
+    settings = get_settings()
+    if authorization is None:
+        if settings.local_auth_bypass_enabled:
+            logger.info(
+                "auth_bypassed | user_id=%s reason=local_dev",
+                settings.local_dev_user_id,
+            )
+            return UserContext(
+                user_id=settings.local_dev_user_id,
+                email=settings.local_dev_user_email,
+                role="local_dev",
+                claims={
+                    "sub": settings.local_dev_user_id,
+                    "email": settings.local_dev_user_email,
+                    "role": "local_dev",
+                    "auth_bypassed": True,
+                },
+            )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authorization header.",
+        )
+
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization header must be a bearer token.",
+        )
+
+    try:
+        return await verify_supabase_jwt(token.strip())
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+        ) from exc
+
+
+BearerCredentials = Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)]
+
+
+async def get_current_user(credentials: BearerCredentials) -> UserContext:
+    authorization = None
+    if credentials is not None:
+        authorization = f"{credentials.scheme} {credentials.credentials}"
+    return await get_current_user_from_authorization(authorization)

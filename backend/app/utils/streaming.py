@@ -67,6 +67,7 @@ async def chat_event_generator(
                     }
                 ),
             }
+        chat_provider_name = provider_router.last_provider_name
 
         assistant_message = ChatMessage(
             id=str(uuid4()),
@@ -78,24 +79,33 @@ async def chat_event_generator(
             (message for message in reversed(request.messages) if message.role == "user"),
             request.messages[-1],
         )
+        title = None
+        if request.conversation_id is None:
+            try:
+                title = await provider_router.generate_title(user_message.content)
+            except Exception as exc:
+                logger.warning("title_generation_failed | error=%s", exc)
+                title = user_message.content[:80]
+
         conversation_id = await conversations.save_exchange(
             user_id=user_id,
             conversation_id=request.conversation_id,
             user_message=user_message,
             assistant_message=assistant_message,
+            title=title,
         )
         logger.info(
             "sse_stream_done | user_id=%s conversation_id=%s provider=%s",
             user_id,
             conversation_id,
-            provider_router.last_provider_name,
+            chat_provider_name,
         )
         yield {
             "event": "done",
             "data": json.dumps(
                 {
                     "done": True,
-                    "provider": provider_router.last_provider_name,
+                    "provider": chat_provider_name,
                     "conversation_id": conversation_id,
                 }
             ),

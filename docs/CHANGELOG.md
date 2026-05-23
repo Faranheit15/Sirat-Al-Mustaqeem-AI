@@ -46,6 +46,12 @@ All notable changes to Sirat Al Mustaqeem AI will be documented in this file.
 - Per-module loggers across all layers: routers, services, LLM providers, middleware, auth, and Supabase client.
 - Configurable `LOG_LEVEL` environment variable (default `INFO`) with runtime validation.
 - Security-aware logging that never exposes API keys, tokens, user emails, or message contents.
+- Supabase auth dependency in `app/middleware/auth.py` with JWKS caching, exp/aud/iss validation, user id/email extraction, and role resolution from JWT metadata or `profiles.role`.
+- Dependency-based sliding-window rate limiter keyed by `user_id`, limited to 30 requests per minute with `Retry-After` headers.
+- Conversation detail endpoint `GET /chat/conversations/{conversation_id}` returning a conversation with messages.
+- Debug-only unauthenticated chat stream endpoint `POST /chat/stream/test` for Swagger UI testing when `DEBUG=true`.
+- Automatic conversation creation on chat stream requests without `conversation_id`.
+- LLM-generated conversation titles of five words or fewer for new chat streams.
 
 ### Changed
 
@@ -57,6 +63,8 @@ All notable changes to Sirat Al Mustaqeem AI will be documented in this file.
 - Updated backend docs for local auth behavior and detailed health responses.
 - Replaced the deprecated `google-generativeai` Gemini transport with the OpenAI-compatible Gemini endpoint through the OpenAI SDK.
 - Documented deployed Swagger testing requirements for auth and new chat requests.
+- Moved chat rate limiting from global middleware to explicit route dependencies so limits are keyed by authenticated user id.
+- Expanded conversation service methods to support create, list with pagination, detail with messages, delete, and add-message operations through Supabase.
 
 ### Removed
 

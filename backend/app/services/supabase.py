@@ -5,7 +5,6 @@ from fastapi import Depends
 
 from app.config import Settings, get_settings
 from app.core.logging import get_logger
-from app.models.schemas import ChatMessage
 
 logger = get_logger(__name__)
 
@@ -62,7 +61,12 @@ class SupabaseClient:
                 return None
             return response.json()
 
-    async def list_conversations(self, user_id: str) -> list[dict[str, Any]]:
+    async def list_conversations(
+        self,
+        user_id: str,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
         data = await self._request(
             "GET",
             "/conversations",
@@ -70,9 +74,26 @@ class SupabaseClient:
                 "select": "id,user_id,title,created_at,updated_at",
                 "user_id": f"eq.{user_id}",
                 "order": "updated_at.desc",
+                "limit": str(limit),
+                "offset": str(offset),
             },
         )
         return [cast(dict[str, Any], item) for item in data if isinstance(item, dict)]
+
+    async def get_conversation(self, user_id: str, conversation_id: str) -> dict[str, Any] | None:
+        data = await self._request(
+            "GET",
+            "/conversations",
+            params={
+                "select": "id,user_id,title,created_at,updated_at",
+                "id": f"eq.{conversation_id}",
+                "user_id": f"eq.{user_id}",
+                "limit": "1",
+            },
+        )
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return cast(dict[str, Any], data[0])
+        return None
 
     async def create_conversation(self, user_id: str, title: str) -> dict[str, Any] | None:
         data = await self._request(
@@ -105,23 +126,37 @@ class SupabaseClient:
             "GET",
             "/messages",
             params={
-                "select": "id,conversation_id,role,content,created_at",
+                "select": "id,conversation_id,role,content,citations,created_at",
                 "conversation_id": f"eq.{conversation_id}",
                 "order": "created_at.asc",
             },
         )
         return [cast(dict[str, Any], item) for item in data if isinstance(item, dict)]
 
-    async def insert_message(self, conversation_id: str, message: ChatMessage) -> None:
-        await self._request(
+    async def insert_message(
+        self,
+        conversation_id: str,
+        role: str,
+        content: str,
+        citations: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any] | None:
+        body: dict[str, Any] = {
+            "conversation_id": conversation_id,
+            "role": role,
+            "content": content,
+        }
+        if citations is not None:
+            body["citations"] = citations
+
+        data = await self._request(
             "POST",
             "/messages",
-            json_body={
-                "conversation_id": conversation_id,
-                "role": message.role,
-                "content": message.content,
-            },
+            json_body=body,
+            prefer="return=representation",
         )
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return cast(dict[str, Any], data[0])
+        return None
 
 
 SettingsDependency = Annotated[Settings, Depends(get_settings)]
