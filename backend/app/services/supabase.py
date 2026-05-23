@@ -53,10 +53,11 @@ class SupabaseClient:
                 response.raise_for_status()
             except httpx.HTTPStatusError as exc:
                 logger.error(
-                    "supabase_error | method=%s path=%s status=%s",
+                    "supabase_error | method=%s path=%s status=%s body=%s",
                     method,
                     path,
                     exc.response.status_code,
+                    exc.response.text,
                 )
                 raise
             if response.status_code == 204 or not response.content:
