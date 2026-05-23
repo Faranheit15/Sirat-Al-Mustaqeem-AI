@@ -170,6 +170,8 @@ class SupabaseClient:
             "apikey": key,
             "Authorization": f"Bearer {key}",
             "Content-Type": content_type,
+            "x-upsert": "true",
+            "cache-control": "max-age=3600",
         }
 
     async def upload_file(
@@ -181,9 +183,15 @@ class SupabaseClient:
         bucket = self.settings.supabase_storage_bucket
         url = f"{self.settings.supabase_storage_url}/object/{bucket}/{path}"
         headers = self._storage_headers(content_type)
-        logger.debug("storage_upload | bucket=%s path=%s", bucket, path)
+        logger.debug("storage_upload | bucket=%s path=%s size=%d", bucket, path, len(content))
         async with httpx.AsyncClient(timeout=self.settings.http_timeout_seconds) as client:
             response = await client.post(url, content=content, headers=headers)
+            if not response.is_success:
+                logger.error(
+                    "storage_upload_failed | status=%d body=%s",
+                    response.status_code,
+                    response.text,
+                )
             response.raise_for_status()
         return path
 
