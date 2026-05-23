@@ -1,7 +1,0 @@
-{
-  "extends": "@sirat/config/tsconfig/react-library",
-  "compilerOptions": {
-    "rootDir": "src"
-  },
-  "include": ["src"]
-}

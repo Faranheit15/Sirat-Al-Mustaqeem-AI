@@ -6,35 +6,44 @@ All notable changes to Sirat Al Mustaqeem AI will be documented in this file.
 
 ### Added
 
-- FastAPI backend structure with `config`, `dependencies`, middleware, routers, services, models, and SSE utilities.
-- Supabase JWT verification with JWKS caching and authenticated user dependency.
-- In-memory sliding-window rate limiter for chat and conversation routes.
-- Multi-provider LLM router with Groq, Gemini, and OpenRouter failover.
-- Supabase conversation/profile service wrappers and chat SSE persistence flow.
-- Backend route documentation and environment placeholders.
-- Next.js App Router web structure for landing, auth, chat, and admin shell routes.
-- Supabase SSR auth clients, protected chat middleware, and provider setup.
-- Zustand chat store with SSE streaming client for the FastAPI backend.
-- Chat components for message thread, markdown/RTL message bubbles, input, sidebar, and streaming indicator.
-- shadcn-style UI primitives for button, input, textarea, card, avatar, scroll area, separator, dropdown menu, dialog, and toast.
-- Dark mode support through `next-themes`.
-- Shared Supabase-aligned `User`, `Message`, `Conversation`, chat, and LLM provider TypeScript types.
-- Typed `@sirat/api-client` functions for chat SSE streaming and conversation list/create/delete.
-- FastAPI conversation create and delete routes backed by Supabase.
+- Independent FastAPI backend scaffold in `backend/` using Python 3.12 and uv.
+- Pydantic v2 settings module with typed environment variables and validation.
+- FastAPI app setup with lifespan, CORS, health, chat, and admin routers.
+- Supabase JWT verification with PyJWT, async JWKS fetching, one-hour JWKS caching, and RS256/ES256 key support.
+- Authenticated user dependency and async Supabase REST wrapper.
+- In-memory sliding-window rate limiter for chat routes.
+- Conversation and message CRUD service backed by Supabase REST.
+- SSE chat streaming endpoint at `POST /chat/stream`.
+- Multi-provider LLM layer with Groq, Gemini, and OpenRouter providers plus failover routing.
+- Sirat Al Mustaqeem AI Islamic research assistant system prompt on every LLM request.
+- Backend Dockerfile based on `python:3.12-slim`.
+- Backend `.env.example` and README with install, run, env, route, and architecture documentation.
+- Frontend placeholder README documenting the planned Next.js stack and backend integration.
+- Mobile placeholder README marking the app as Phase 3.
+- Repository-level README with project overview, stack, layout, backend quick start, API summary, and development principles.
+- CONTRIBUTING guide with workflow, style, documentation, secrets, and architecture guardrails.
+- Backend `.gitignore` and `.dockerignore`.
+- Local-development auth bypass for Swagger UI testing through `AUTH_REQUIRED=false`.
+- Expanded health response with request, connection, header, and proxy details visible to the backend.
 
 ### Changed
 
-- Replaced the initial versioned API scaffold with the requested `app/routers` backend structure.
-- Updated the TypeScript API client route paths to match the backend routes.
-- Updated web service documentation with actual route structure and chat/auth architecture.
-- Replaced the web app's raw chat fetch helper with the shared `@sirat/api-client` package.
-- Updated API package scripts to use a workspace-local uv cache for sandbox-friendly verification.
+- Restarted the project direction from a Turborepo monorepo to independent `backend/`, `frontend/`, and `mobile/` folders.
+- Updated backend documentation to match the new standalone FastAPI architecture.
+- Updated service docs to describe the backend-first standalone app direction instead of the old monorepo packages.
+- Updated agent guide files to reference app READMEs for `backend/`, `frontend/`, and `mobile/`.
+- Renamed frontend service documentation from `web.md` to `frontend.md`.
+- Updated backend docs for local auth behavior and detailed health responses.
 
-### Fixed
+### Removed
 
-- Avoided uv global cache permission failures during monorepo lint, typecheck, and build.
-- Fixed Supabase JWT verification for ES256 elliptic-curve JWKS keys so authenticated API requests do not fail with RSA-only key parsing.
-- Fixed SSE parsing for CRLF-framed event streams so streamed assistant tokens render in the chat window.
-- Fixed message persistence for Supabase schemas where `messages` does not include a `user_id` column.
-- Added saved conversation message loading so selecting a sidebar conversation hydrates the chat window.
-- Added the Sirat Al Mustaqeem AI Islamic research assistant system prompt to every LLM request.
+- Old `apps/` monorepo implementation after the backend-first reset.
+- Turborepo/package workspace files from the previous scaffold.
+- Obsolete shared package service documentation.
+
+### Verified
+
+- `uv sync --cache-dir .uv-cache`
+- `uv run --cache-dir .uv-cache ruff check .`
+- `uv run --cache-dir .uv-cache mypy app`
+- FastAPI import and route registration smoke check.

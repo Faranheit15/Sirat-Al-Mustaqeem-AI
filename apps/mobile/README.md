@@ -1,3 +1,0 @@
-# Mobile
-
-Phase 3
