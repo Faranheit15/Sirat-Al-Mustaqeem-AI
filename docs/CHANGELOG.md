@@ -4,6 +4,12 @@ All notable changes to Sirat Al Mustaqeem AI will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Supabase Storage upload now sends `x-upsert: true` and `cache-control: max-age=3600` headers, preventing 400 errors on re-upload of a file that already exists in the bucket.
+- `SupabaseClient._request()` now logs the full Supabase response body on HTTP errors, making PostgREST failures visible in server logs instead of only surfacing the status code.
+- `_require_admin` dependency now uses the `Annotated[UserContext, Depends(get_current_user)]` alias instead of the bare `UserContext` dataclass, fixing a FastAPI bug where `current_user` appeared as a multipart form field and caused 422 errors on `POST /admin/documents/upload`.
+
 ### Added
 
 - Document ingestion pipeline: `app/services/ingestion/` package with `extractor.py` (PDF/DOCX/TXT extraction with optional pytesseract OCR for scanned PDFs), `chunker.py` (Islamic-aware chunking — Quran at ayah boundaries, hadith as full units, general semantic sliding-window), `embedder.py` (async Gemini `text-embedding-004` via REST batchEmbedContents), and `pipeline.py` (orchestrated extract→chunk→embed→store with per-step job status updates).

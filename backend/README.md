@@ -27,57 +27,26 @@ Health check:
 GET http://localhost:8000/health
 ```
 
-## Required Supabase Tables
+## Database Migrations
 
-Run these SQL migrations in your Supabase project before using the ingestion routes:
+SQL migration files live in `backend/migrations/`. Run them in order in the Supabase SQL Editor before starting the app:
+
+| File | Contents |
+|------|----------|
+| `001_conversations.sql` | `conversations` and `messages` tables for chat history |
+| `002_documents_ingestion.sql` | `documents`, `document_chunks` (pgvector 768-dim), `ingestion_jobs` |
+
+To reset and reapply (destructive — drops all data):
 
 ```sql
--- Enable pgvector
-create extension if not exists vector;
-
--- Documents table
-create table documents (
-  id uuid primary key default gen_random_uuid(),
-  title text not null,
-  file_path text,
-  file_type text not null,
-  file_size integer,
-  language text,
-  page_count integer,
-  is_ocr boolean default false,
-  status text not null default 'pending',
-  chunk_count integer default 0,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now(),
-  metadata jsonb
-);
-
--- Document chunks with pgvector embeddings
-create table document_chunks (
-  id uuid primary key default gen_random_uuid(),
-  document_id uuid references documents(id) on delete cascade,
-  chunk_index integer not null,
-  content text not null,
-  embedding vector(768),
-  doc_type text,
-  language text,
-  metadata jsonb,
-  created_at timestamptz default now()
-);
-create index on document_chunks using ivfflat (embedding vector_cosine_ops);
-
--- Ingestion jobs
-create table ingestion_jobs (
-  id uuid primary key default gen_random_uuid(),
-  document_id uuid references documents(id) on delete cascade,
-  status text not null default 'pending',
-  progress integer default 0,
-  error_log text,
-  started_at timestamptz,
-  completed_at timestamptz,
-  created_at timestamptz default now()
-);
+drop table if exists ingestion_jobs cascade;
+drop table if exists document_chunks cascade;
+drop table if exists documents cascade;
+drop table if exists messages cascade;
+drop table if exists conversations cascade;
 ```
+
+Then re-run the migration files in order.
 
 Also create a Supabase Storage bucket named `documents` (or the value of `SUPABASE_STORAGE_BUCKET`).
 
