@@ -41,16 +41,30 @@ class SupabaseClient:
         url = f"{self.settings.supabase_rest_url}{path}"
         logger.debug("supabase_request | method=%s path=%s", method, path)
 
-        async with httpx.AsyncClient(timeout=self.settings.http_timeout_seconds) as client:
+        last_exc: Exception | None = None
+        for attempt in range(2):  # retry once on remote disconnection
             try:
-                response = await client.request(
+                async with httpx.AsyncClient(timeout=self.settings.http_timeout_seconds) as client:
+                    response = await client.request(
+                        method,
+                        url,
+                        params=params,
+                        json=json_body,
+                        headers=headers,
+                    )
+                    response.raise_for_status()
+                if response.status_code == 204 or not response.content:
+                    return None
+                return response.json()
+            except httpx.RemoteProtocolError as exc:
+                last_exc = exc
+                logger.warning(
+                    "supabase_disconnected | method=%s path=%s attempt=%d retrying",
                     method,
-                    url,
-                    params=params,
-                    json=json_body,
-                    headers=headers,
+                    path,
+                    attempt + 1,
                 )
-                response.raise_for_status()
+                continue
             except httpx.HTTPStatusError as exc:
                 logger.error(
                     "supabase_error | method=%s path=%s status=%s body=%s",
@@ -60,9 +74,7 @@ class SupabaseClient:
                     exc.response.text,
                 )
                 raise
-            if response.status_code == 204 or not response.content:
-                return None
-            return response.json()
+        raise last_exc or RuntimeError(f"supabase_request failed: {method} {path}")
 
     async def list_conversations(
         self,
