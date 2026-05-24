@@ -1,6 +1,10 @@
+import asyncio
+import json
+from collections.abc import AsyncIterator
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, UploadFile, status
+from fastapi.responses import StreamingResponse
 
 from app.config import Settings, get_settings
 from app.core.logging import get_logger
@@ -281,6 +285,56 @@ async def list_ingestion_jobs(
             total=len(rows),
         )
     )
+
+
+@router.get("/ingestion-jobs/{job_id}/stream")
+async def stream_ingestion_job(
+    job_id: str,
+    current_user: AdminUser,
+    supabase: SupabaseDependency,
+) -> StreamingResponse:
+    """SSE stream that pushes job + document status every 2 s until completion or failure."""
+    logger.info("admin_stream_job | user_id=%s job_id=%s", current_user.user_id, job_id)
+
+    async def _generate() -> AsyncIterator[str]:
+        _TERMINAL = {"completed", "failed"}
+        try:
+            while True:
+                job = await supabase.get_ingestion_job(job_id)
+                if job is None:
+                    yield f"event: error\ndata: {json.dumps({'error': 'job not found'})}\n\n"
+                    return
+
+                doc = await supabase.get_document(str(job["document_id"]))
+
+                payload: dict[str, object] = {
+                    "job_id": job["id"],
+                    "document_id": job["document_id"],
+                    "job_status": job["status"],
+                    "progress": job.get("progress", 0),
+                    "error_log": job.get("error_log"),
+                    "started_at": job.get("started_at"),
+                    "completed_at": job.get("completed_at"),
+                }
+                if doc:
+                    payload["doc_status"] = doc.get("status")
+                    payload["page_count"] = doc.get("page_count")
+                    payload["chunk_count"] = doc.get("chunk_count", 0)
+                    payload["language"] = doc.get("language")
+                    payload["is_ocr"] = doc.get("is_ocr", False)
+
+                is_terminal = job["status"] in _TERMINAL
+                event = "done" if is_terminal else "progress"
+                yield f"event: {event}\ndata: {json.dumps(payload)}\n\n"
+
+                if is_terminal:
+                    return
+
+                await asyncio.sleep(2)
+        except asyncio.CancelledError:
+            logger.info("admin_stream_job_disconnected | job_id=%s", job_id)
+
+    return StreamingResponse(_generate(), media_type="text/event-stream")
 
 
 @router.get("/status", response_model=ApiEnvelope)

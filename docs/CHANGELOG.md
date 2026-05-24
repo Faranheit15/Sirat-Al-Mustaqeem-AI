@@ -6,6 +6,13 @@ All notable changes to Sirat Al Mustaqeem AI will be documented in this file.
 
 ### Fixed
 
+- `GET /admin/ingestion-jobs/{job_id}/stream` SSE endpoint: streams job status, progress, error_log, doc_status, page_count, chunk_count, language, and is_ocr every 2 s until the job reaches `completed` or `failed`. Uses `event: progress` for intermediate ticks and `event: done` for the terminal event. Client disconnect is handled gracefully via `asyncio.CancelledError`.
+- Added `SupabaseClient.get_ingestion_job(job_id)` to fetch a single ingestion job by id.
+
+- Ingestion pipeline no longer blocks the async event loop during PDF/DOCX/TXT extraction and text chunking. Both `extract_document()` and `chunk_document()` are now offloaded to a thread pool via `asyncio.to_thread`, so large documents (e.g. the full Quran PDF) do not freeze the server while being processed.
+- Startup recovery hook in `app/main.py` lifespan: on every boot, any ingestion job stuck in `extracting`, `chunking`, `embedding`, or `storing` (caused by a process restart mid-run) is automatically re-queued. Each stuck job downloads its file from Supabase Storage and re-runs the full pipeline. If the file or document is missing, the job is marked `failed` with a descriptive `error_log`.
+- Added `SupabaseClient.list_stuck_ingestion_jobs()` to query the `ingestion_jobs` table for interrupted jobs by status.
+
 - Supabase Storage upload now sends `x-upsert: true` and `cache-control: max-age=3600` headers, preventing 400 errors on re-upload of a file that already exists in the bucket.
 - `SupabaseClient._request()` now logs the full Supabase response body on HTTP errors, making PostgREST failures visible in server logs instead of only surfacing the status code.
 - `_require_admin` dependency now uses the `Annotated[UserContext, Depends(get_current_user)]` alias instead of the bare `UserContext` dataclass, fixing a FastAPI bug where `current_user` appeared as a multipart form field and caused 422 errors on `POST /admin/documents/upload`.

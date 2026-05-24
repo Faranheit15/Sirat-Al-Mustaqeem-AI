@@ -370,6 +370,36 @@ class SupabaseClient:
         )
         return [cast(dict[str, Any], item) for item in data if isinstance(item, dict)]
 
+    async def get_ingestion_job(self, job_id: str) -> dict[str, Any] | None:
+        data = await self._request(
+            "GET",
+            "/ingestion_jobs",
+            params={
+                "select": (
+                    "id,document_id,status,progress,error_log,started_at,completed_at,created_at"
+                ),
+                "id": f"eq.{job_id}",
+                "limit": "1",
+            },
+        )
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return cast(dict[str, Any], data[0])
+        return None
+
+    async def list_stuck_ingestion_jobs(self) -> list[dict[str, Any]]:
+        """Return jobs whose status indicates they were interrupted mid-run."""
+        _STUCK = ("extracting", "chunking", "embedding", "storing")
+        data = await self._request(
+            "GET",
+            "/ingestion_jobs",
+            params={
+                "select": "id,document_id,status,progress,started_at,created_at",
+                "status": f"in.({','.join(_STUCK)})",
+                "order": "created_at.asc",
+            },
+        )
+        return [cast(dict[str, Any], item) for item in data if isinstance(item, dict)]
+
     async def get_ingestion_job_by_document(self, document_id: str) -> dict[str, Any] | None:
         data = await self._request(
             "GET",

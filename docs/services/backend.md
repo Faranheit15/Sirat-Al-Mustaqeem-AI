@@ -17,13 +17,15 @@ Implemented:
 - LLM provider failover: Groq, then Gemini, then OpenRouter.
 - Dockerfile for the backend service.
 - Swagger UI testing through FastAPI docs.
+- Document ingestion pipeline: PDF/DOCX/TXT extraction, Islamic-aware chunking, Gemini embedding, and Supabase vector storage.
+- Admin document management routes (`POST /admin/documents/upload`, list, detail, delete, reprocess) and ingestion job listing.
+- Startup recovery: on every boot, jobs stuck mid-run (`extracting`, `chunking`, `embedding`, `storing`) from a previous crash or restart are automatically re-queued.
+- CPU-bound extraction and chunking run in a thread pool via `asyncio.to_thread` so they never block the async event loop.
 
 Not implemented yet:
 
-- RAG/vector search.
-- Document ingestion.
+- RAG/vector search (retrieval query, re-ranking, prompt construction with citations).
 - Islamic source retrieval pipeline.
-- Real admin functionality beyond a protected placeholder.
 
 ## Conventions
 
@@ -37,6 +39,22 @@ Not implemented yet:
 - Use the API response envelope pattern for JSON routes: `{ data, error, message }`.
 - Use SSE for streamed chat responses.
 - Do not add RAG or ingestion code until the core backend API is stable.
+
+## RAG Architecture
+
+The RAG stack is built from scratch with direct API calls and pure Python. No LangChain, LlamaIndex, or similar framework is used.
+
+**Why no framework:**
+LangChain and LlamaIndex abstract over the parts that matter most here. Their splitters have no concept of ayah or hadith boundaries; their retrieval chains assume generic Q&A. For an Islamic knowledge base the chunk boundaries, metadata per doc type, and citation structure are domain-specific enough that framework abstractions fight you more than they help.
+
+**What this means in practice:**
+
+- `embedder.py` calls Gemini `batchEmbedContents` directly via `httpx`. No SDK wrapper.
+- `chunker.py` is hand-written Islamic-aware logic: Quran splits at ayah boundaries, hadith kept as full units, general text uses a sliding-window by word count.
+- `supabase.py` inserts chunks via Supabase REST and will query via a raw `rpc()` call to a pgvector `match_documents` function.
+- Retrieval query, re-ranking, and citation-backed prompt construction are not yet built and will be owned entirely in the backend with no framework in between.
+
+The tradeoff is more code to write, but full control over every decision that affects answer quality and citation accuracy.
 
 ## Route Structure
 
@@ -58,6 +76,7 @@ Routes should validate inputs with Pydantic models, delegate business logic to s
 - `GET /chat/conversations/{conversation_id}`: authenticated conversation detail with messages.
 - `GET /chat/conversations/{conversation_id}/messages`: authenticated message history.
 - `DELETE /chat/conversations/{conversation_id}`: authenticated conversation delete.
+- `GET /admin/ingestion-jobs/{job_id}/stream`: authenticated SSE stream that pushes job + document status every 2 s until the job reaches `completed` or `failed`.
 - `GET /admin/status`: authenticated placeholder admin status route.
 
 ## Auth

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -54,7 +55,7 @@ class IngestionPipeline:
         self, document_id: str, job_id: str, file_bytes: bytes, file_type: str
     ) -> None:
         await self.supabase.update_ingestion_job(job_id, status="extracting", progress=10)
-        extracted = extract_document(file_bytes, file_type)
+        extracted = await asyncio.to_thread(extract_document, file_bytes, file_type)
         logger.info(
             "ingestion_extracted | document_id=%s pages=%d is_ocr=%s chars=%d",
             document_id,
@@ -81,7 +82,8 @@ class IngestionPipeline:
         language: str | None,
     ) -> None:
         await self.supabase.update_ingestion_job(job_id, status="chunking", progress=30)
-        chunks = chunk_document(
+        chunks = await asyncio.to_thread(
+            chunk_document,
             text=text,
             document_id=document_id,
             language=language,
