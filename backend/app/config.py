@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     rag_top_k: int = Field(default=5, alias="RAG_TOP_K")
     rag_threshold: float = Field(default=0.7, alias="RAG_THRESHOLD")
 
+    # "local" uses sentence-transformers (all-MiniLM-L12-v2, 384 dims, no API).
+    # "gemini" falls back to the Gemini batchEmbedContents REST API.
+    embedding_provider: str = Field(default="local", alias="EMBEDDING_PROVIDER")
+
     @field_validator(
         "rate_limit_requests_per_minute",
         "jwks_cache_ttl_seconds",

@@ -6,6 +6,17 @@ All notable changes to Sirat Al Mustaqeem AI will be documented in this file.
 
 ### Added
 
+- Local sentence-transformers embedding provider (`EMBEDDING_PROVIDER=local`, default): `all-MiniLM-L12-v2` (384 dims) loaded once at module level, encoded via `asyncio.to_thread`. Zero API cost, no rate limits, encodes thousands of chunks in seconds on CPU.
+- `EMBEDDING_PROVIDER` environment variable (`local` | `gemini`, default `local`) added to `Settings`. Setting `EMBEDDING_PROVIDER=gemini` restores the previous Gemini `batchEmbedContents` path (useful if higher-quality cloud embeddings are needed in future).
+- Migration `004_resize_embedding.sql`: resizes `document_chunks.embedding` from `vector(768)` to `vector(384)`, purges incompatible old chunk rows, recreates the IVFFlat index, and replaces `match_chunks` with a `vector(384)` variant.
+- `sentence-transformers>=3.0.0` added to `backend/pyproject.toml`; `sentence_transformers` added to mypy `ignore_missing_imports` overrides.
+
+### Fixed
+
+- Persistent `429 Too Many Requests` errors from Gemini embedding API that blocked document ingestion even after adding inter-batch delays and exponential backoff. Resolved by switching to local embeddings by default.
+
+### Added
+
 - RAG search service (`app/services/search.py`): `semantic_search()` embeds the query via Gemini `RETRIEVAL_QUERY` task type, calls the `match_chunks` Supabase RPC, and returns ranked `SearchResult` objects with `source_label()` helpers for context formatting. Returns an empty list gracefully if no documents are indexed or the embedding call fails.
 - `match_chunks` PostgreSQL function (`migrations/003_match_chunks.sql`): pgvector cosine similarity search over `document_chunks`, joined with `documents`, filtered to `status = 'completed'`, with configurable `match_count` and `match_threshold` parameters.
 - Citation extractor (`app/utils/citations.py`): `extract_citations()` parses `[Quran X:Y]`, `[Hadith Collection, N]`, and `[Author, Book, ...]` bracket patterns from LLM response text, deduplicates, and returns structured `Citation(type, reference)` objects.

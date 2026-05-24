@@ -34,8 +34,9 @@ SQL migration files live in `backend/migrations/`. Run them in order in the Supa
 | File | Contents |
 |------|----------|
 | `001_conversations.sql` | `conversations` and `messages` tables for chat history |
-| `002_documents_ingestion.sql` | `documents`, `document_chunks` (pgvector 768-dim), `ingestion_jobs` |
-| `003_match_chunks.sql` | `match_chunks(query_embedding, match_count, match_threshold)` pgvector RPC function for semantic search |
+| `002_documents_ingestion.sql` | `documents`, `document_chunks` (pgvector 768-dim initial), `ingestion_jobs` |
+| `003_match_chunks.sql` | `match_chunks(query_embedding, match_count, match_threshold)` pgvector RPC function for semantic search (768-dim) |
+| `004_resize_embedding.sql` | Resizes `document_chunks.embedding` to 384 dims, purges old rows, recreates index and `match_chunks` for `all-MiniLM-L12-v2` |
 
 To reset and reapply (destructive — drops all data):
 
@@ -88,7 +89,8 @@ Runtime configuration:
 Document ingestion configuration:
 
 - `SUPABASE_STORAGE_BUCKET` (default `documents`)
-- `GEMINI_EMBEDDING_MODEL` (default `models/text-embedding-004`)
+- `EMBEDDING_PROVIDER` (default `local`) — `local` uses `all-MiniLM-L12-v2` via sentence-transformers (384 dims, no API key, no rate limits); `gemini` uses the Gemini `batchEmbedContents` REST API (requires `GEMINI_API_KEY`, 768 dims)
+- `GEMINI_EMBEDDING_MODEL` (default `models/text-embedding-004`) — only used when `EMBEDDING_PROVIDER=gemini`
 - `INGESTION_CHUNK_SIZE` (default `500` tokens)
 - `INGESTION_CHUNK_OVERLAP` (default `50` tokens)
 
@@ -96,6 +98,7 @@ RAG configuration:
 
 - `RAG_TOP_K` (default `5`) — number of chunks to retrieve per query
 - `RAG_THRESHOLD` (default `0.7`) — minimum cosine similarity (0–1) for a chunk to be included
+- `EMBEDDING_PROVIDER` (default `local`) — `local` uses sentence-transformers `all-MiniLM-L12-v2` (no API key); `gemini` uses Gemini REST API
 
 Protected routes require a Supabase bearer token. For local Swagger chat testing without a JWT, set `DEBUG=true` and use `POST /chat/stream/test`.
 
@@ -243,8 +246,8 @@ Admin routes accept PDF, DOCX, and TXT files up to 50 MB. The pipeline runs in a
 
 1. **Extract** — `pypdf` for text PDFs; pytesseract OCR fallback for scanned PDFs (Arabic + Urdu + English); `python-docx` for DOCX; chardet encoding detection for TXT.
 2. **Chunk** — Islamic-aware: Quran text split at ayah boundaries, hadith kept as complete units (isnad + matn), general text chunked by token count with configurable overlap.
-3. **Embed** — Gemini `text-embedding-004` via the REST `batchEmbedContents` endpoint in batches of 100.
-4. **Store** — chunk rows with 768-dim pgvector embeddings written to `document_chunks`.
+3. **Embed** — by default, `sentence-transformers` `all-MiniLM-L12-v2` runs locally (384 dims, no API key needed). Set `EMBEDDING_PROVIDER=gemini` to use the Gemini `batchEmbedContents` REST API instead (768 dims, requires `GEMINI_API_KEY`).
+4. **Store** — chunk rows with 384-dim pgvector embeddings written to `document_chunks`.
 
 For OCR of scanned PDFs, pytesseract must be installed along with the `tesseract-ocr` system binary and the `ara`, `urd`, and `eng` language packs.
 

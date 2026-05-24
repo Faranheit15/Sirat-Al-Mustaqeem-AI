@@ -52,6 +52,11 @@
 - **Decision:** Endpoint returns status, table names, and full error text in the response body; no auth required
 - **Reason:** Auth would defeat the purpose. No sensitive data is exposed — only connection status and table names. Errors land in the response body so Swagger always shows the full message.
 
+## 2026-05-24: Switched default embedding to local sentence-transformers
+- **Context:** Gemini embedding API (gemini-embedding-001) kept returning 429 Too Many Requests on the free tier — even with 13 s inter-batch delays and exponential backoff retries, a 100-chunk batch regularly exhausted the quota.
+- **Decision:** Replace the Gemini embedding call with a local `sentence-transformers` model (`all-MiniLM-L12-v2`, 384 dims). The model is loaded once at startup and cached at module level. Encoding runs in `asyncio.to_thread` so it never blocks the async event loop. Gemini is kept as an optional fallback via `EMBEDDING_PROVIDER=gemini`.
+- **Reason:** Local inference has zero API cost, no rate limits, and encodes 1000 chunks in a few seconds on CPU. The tradeoff is a ~90 MB model download at first startup and a dimension change from 768 to 384. The `match_chunks` pgvector function and `document_chunks.embedding` column are updated in migration `004_resize_embedding.sql`. The main tradeoff is Docker image size: `sentence-transformers` pulls in PyTorch (~2 GB on disk); if image size is a hard constraint, switching to `EMBEDDING_PROVIDER=gemini` avoids that dependency.
+
 ## Initial Platform Decisions (deprecated, ignore)
 
 - Use Turborepo for the monorepo so the web app, API service, and shared TypeScript packages can evolve together with cached task orchestration.

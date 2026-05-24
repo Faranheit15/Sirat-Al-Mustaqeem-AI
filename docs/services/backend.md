@@ -17,7 +17,7 @@ Implemented:
 - LLM provider failover: Groq, then Gemini, then OpenRouter.
 - Dockerfile for the backend service.
 - Swagger UI testing through FastAPI docs.
-- Document ingestion pipeline: PDF/DOCX/TXT extraction, Islamic-aware chunking, Gemini embedding, and Supabase vector storage.
+- Document ingestion pipeline: PDF/DOCX/TXT extraction, Islamic-aware chunking, local sentence-transformers embedding (384 dims, no API), and Supabase vector storage. Gemini embedding available as a fallback via `EMBEDDING_PROVIDER=gemini`.
 - Admin document management routes (`POST /admin/documents/upload`, list, detail, delete, reprocess) and ingestion job listing.
 - Startup recovery: on every boot, jobs stuck mid-run (`extracting`, `chunking`, `embedding`, `storing`) from a previous crash or restart are automatically re-queued.
 - CPU-bound extraction and chunking run in a thread pool via `asyncio.to_thread` so they never block the async event loop.
@@ -50,7 +50,7 @@ LangChain and LlamaIndex abstract over the parts that matter most here. Their sp
 
 **What this means in practice:**
 
-- `embedder.py` calls Gemini `batchEmbedContents` directly via `httpx`. No SDK wrapper.
+- `embedder.py` uses `sentence-transformers` `all-MiniLM-L12-v2` by default (loaded once at module level, encoded via `asyncio.to_thread`). The Gemini `batchEmbedContents` path is retained for `EMBEDDING_PROVIDER=gemini`.
 - `chunker.py` is hand-written Islamic-aware logic: Quran splits at ayah boundaries, hadith kept as full units, general text uses a sliding-window by word count.
 - `supabase.py` inserts chunks via Supabase REST and will query via a raw `rpc()` call to a pgvector `match_documents` function.
 - Retrieval query (`semantic_search` in `app/services/search.py`) calls `match_chunks` via Supabase RPC, builds a formatted context block, and injects it into the LLM system prompt before every chat request.
