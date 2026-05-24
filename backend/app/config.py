@@ -57,12 +57,16 @@ class Settings(BaseSettings):
     ingestion_chunk_size: int = Field(default=500, alias="INGESTION_CHUNK_SIZE")
     ingestion_chunk_overlap: int = Field(default=50, alias="INGESTION_CHUNK_OVERLAP")
 
+    rag_top_k: int = Field(default=5, alias="RAG_TOP_K")
+    rag_threshold: float = Field(default=0.7, alias="RAG_THRESHOLD")
+
     @field_validator(
         "rate_limit_requests_per_minute",
         "jwks_cache_ttl_seconds",
         "http_timeout_seconds",
         "ingestion_chunk_size",
         "ingestion_chunk_overlap",
+        "rag_top_k",
     )
     @classmethod
     def must_be_positive(cls, value: int) -> int:

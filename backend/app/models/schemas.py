@@ -201,6 +201,42 @@ class IngestionJobResponse(ApiEnvelope):
     data: IngestionJob
 
 
+# --- RAG search schemas ---
+
+
+class SearchResult(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    chunk_id: str
+    document_id: str
+    document_title: str
+    chunk_index: int
+    content: str
+    doc_type: str
+    similarity: float
+    language: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class Citation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: str
+    reference: str
+    source_doc_id: str | None = None
+
+
+class SearchData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str
+    results: list[SearchResult]
+
+
+class SearchResponse(ApiEnvelope):
+    data: SearchData
+
+
 # --- DB health check schemas ---
 
 

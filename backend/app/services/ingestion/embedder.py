@@ -14,6 +14,35 @@ _GEMINI_EMBED_URL = "https://generativelanguage.googleapis.com/v1beta/{model}:ba
 _BATCH_SIZE = 100
 
 
+async def embed_query(query: str, model: str | None = None) -> list[float]:
+    """Embed a single query string using RETRIEVAL_QUERY task type."""
+    settings = get_settings()
+    if settings.gemini_api_key is None:
+        raise RuntimeError("GEMINI_API_KEY is required for query embeddings.")
+
+    api_key = settings.gemini_api_key.get_secret_value()
+    embed_model = model or settings.gemini_embedding_model
+    url = _GEMINI_EMBED_URL.format(model=embed_model)
+
+    body = {
+        "requests": [
+            {
+                "model": embed_model,
+                "content": {"parts": [{"text": query}]},
+                "taskType": "RETRIEVAL_QUERY",
+            }
+        ]
+    }
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.post(url, json=body, params={"key": api_key})
+        response.raise_for_status()
+    embeddings: list[dict[str, Any]] = response.json().get("embeddings", [])
+    if not embeddings:
+        raise RuntimeError("Gemini returned no embedding for query.")
+    values: list[float] = embeddings[0].get("values", [])
+    return values
+
+
 async def embed_chunks(
     chunks: list[TextChunk],
     model: str | None = None,

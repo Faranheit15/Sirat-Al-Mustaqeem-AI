@@ -370,6 +370,25 @@ class SupabaseClient:
         )
         return [cast(dict[str, Any], item) for item in data if isinstance(item, dict)]
 
+    async def match_chunks(
+        self,
+        query_embedding: list[float],
+        match_count: int = 5,
+        match_threshold: float = 0.7,
+    ) -> list[dict[str, Any]]:
+        data = await self._request(
+            "POST",
+            "/rpc/match_chunks",
+            json_body={
+                "query_embedding": query_embedding,
+                "match_count": match_count,
+                "match_threshold": match_threshold,
+            },
+        )
+        if not isinstance(data, list):
+            return []
+        return [cast(dict[str, Any], item) for item in data if isinstance(item, dict)]
+
     async def get_ingestion_job(self, job_id: str) -> dict[str, Any] | None:
         data = await self._request(
             "GET",

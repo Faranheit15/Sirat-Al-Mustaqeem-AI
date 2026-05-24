@@ -5,10 +5,14 @@ from uuid import uuid4
 
 from sse_starlette.sse import EventSourceResponse
 
+from app.config import Settings
 from app.core.logging import get_logger
 from app.models.schemas import ChatMessage, ChatStreamRequest
 from app.services.conversation import ConversationService
 from app.services.llm.router import ProviderRouter
+from app.services.search import SearchResult, build_context_block, semantic_search
+from app.services.supabase import SupabaseClient
+from app.utils.citations import extract_citations
 
 logger = get_logger(__name__)
 
@@ -41,11 +45,29 @@ def append_assistant_delta(previous: str, delta: str) -> str:
     return f"{previous}{separator}{delta}"
 
 
+def _serialize_sources(results: list[SearchResult]) -> str:
+    return json.dumps(
+        [
+            {
+                "chunk_id": r.chunk_id,
+                "document_id": r.document_id,
+                "document_title": r.document_title,
+                "source_label": r.source_label(),
+                "doc_type": r.doc_type,
+                "similarity": round(r.similarity, 4),
+            }
+            for r in results
+        ]
+    )
+
+
 async def chat_event_generator(
     request: ChatStreamRequest,
     user_id: str,
     provider_router: ProviderRouter,
     conversations: ConversationService,
+    supabase: SupabaseClient,
+    settings: Settings,
 ) -> AsyncIterator[dict[str, str]]:
     assistant_content = ""
 
@@ -56,7 +78,33 @@ async def chat_event_generator(
     )
 
     try:
-        async for delta in provider_router.stream_chat(request.messages):
+        # --- RAG: retrieve relevant context ---
+        user_message = next(
+            (m for m in reversed(request.messages) if m.role == "user"),
+            request.messages[-1],
+        )
+
+        search_results = await semantic_search(
+            query=user_message.content,
+            supabase=supabase,
+            settings=settings,
+        )
+
+        if search_results:
+            logger.info(
+                "rag_context_injected | sources=%d top_similarity=%.3f",
+                len(search_results),
+                search_results[0].similarity,
+            )
+            yield {
+                "event": "sources",
+                "data": _serialize_sources(search_results),
+            }
+
+        context = build_context_block(search_results) if search_results else None
+
+        # --- Stream LLM response with optional RAG context ---
+        async for delta in provider_router.stream_chat(request.messages, context=context):
             assistant_content = append_assistant_delta(assistant_content, delta)
             yield {
                 "event": "delta",
@@ -69,15 +117,19 @@ async def chat_event_generator(
             }
         chat_provider_name = provider_router.last_provider_name
 
+        # --- Extract and structure citations from the completed response ---
+        raw_citations = extract_citations(assistant_content)
+        structured_citations = [
+            {"type": c.type, "reference": c.reference, "source_doc_id": c.source_doc_id}
+            for c in raw_citations
+        ]
+
         assistant_message = ChatMessage(
             id=str(uuid4()),
             role="assistant",
             content=assistant_content,
+            citations=structured_citations if structured_citations else None,
             created_at=datetime.now(UTC).isoformat(),
-        )
-        user_message = next(
-            (message for message in reversed(request.messages) if message.role == "user"),
-            request.messages[-1],
         )
         title = None
         if request.conversation_id is None:
@@ -95,10 +147,11 @@ async def chat_event_generator(
             title=title,
         )
         logger.info(
-            "sse_stream_done | user_id=%s conversation_id=%s provider=%s",
+            "sse_stream_done | user_id=%s conversation_id=%s provider=%s citations=%d",
             user_id,
             conversation_id,
             chat_provider_name,
+            len(structured_citations),
         )
         yield {
             "event": "done",
@@ -107,6 +160,7 @@ async def chat_event_generator(
                     "done": True,
                     "provider": chat_provider_name,
                     "conversation_id": conversation_id,
+                    "citations": structured_citations,
                 }
             ),
         }
@@ -125,6 +179,8 @@ def stream_chat_response(
     user_id: str,
     provider_router: ProviderRouter,
     conversations: ConversationService,
+    supabase: SupabaseClient,
+    settings: Settings,
 ) -> EventSourceResponse:
     return EventSourceResponse(
         chat_event_generator(
@@ -132,6 +188,8 @@ def stream_chat_response(
             user_id=user_id,
             provider_router=provider_router,
             conversations=conversations,
+            supabase=supabase,
+            settings=settings,
         ),
         media_type="text/event-stream",
     )

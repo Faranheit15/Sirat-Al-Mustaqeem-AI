@@ -35,6 +35,7 @@ SQL migration files live in `backend/migrations/`. Run them in order in the Supa
 |------|----------|
 | `001_conversations.sql` | `conversations` and `messages` tables for chat history |
 | `002_documents_ingestion.sql` | `documents`, `document_chunks` (pgvector 768-dim), `ingestion_jobs` |
+| `003_match_chunks.sql` | `match_chunks(query_embedding, match_count, match_threshold)` pgvector RPC function for semantic search |
 
 To reset and reapply (destructive — drops all data):
 
@@ -91,6 +92,11 @@ Document ingestion configuration:
 - `INGESTION_CHUNK_SIZE` (default `500` tokens)
 - `INGESTION_CHUNK_OVERLAP` (default `50` tokens)
 
+RAG configuration:
+
+- `RAG_TOP_K` (default `5`) — number of chunks to retrieve per query
+- `RAG_THRESHOLD` (default `0.7`) — minimum cosine similarity (0–1) for a chunk to be included
+
 Protected routes require a Supabase bearer token. For local Swagger chat testing without a JWT, set `DEBUG=true` and use `POST /chat/stream/test`.
 
 Deployed environments should set:
@@ -118,24 +124,31 @@ The legacy local auth bypass is only available when `ENVIRONMENT=local` or `ENVI
 - `DELETE /admin/documents/{id}`: admin — delete document, chunks, and stored file.
 - `POST /admin/documents/{id}/reprocess`: admin — re-run ingestion pipeline on existing file.
 - `GET /admin/ingestion-jobs`: admin — list all ingestion jobs with progress.
+- `GET /admin/ingestion-jobs/{id}/stream`: admin — SSE stream of job + document status every 2 s until completion.
 - `GET /admin/status`: admin — admin health check.
+- `GET /chat/search?q=...`: authenticated — semantic search over the knowledge base; returns ranked chunks with similarity scores.
 
 For `POST /chat/stream`, omit `conversation_id` or set it to `null` when starting a new conversation. Swagger UI may show `"string"` as a placeholder; the backend normalizes that placeholder to `null`.
 
 ### SSE event format
 
-Each SSE response contains three event types:
+Each SSE chat response contains up to four event types (in order):
 
 ```
+event: sources
+data: [{"chunk_id": "...", "document_id": "...", "document_title": "...", "source_label": "...", "doc_type": "quran", "similarity": 0.87}, ...]
+
 event: delta
 data: {"content": "<token>", "provider": "groq"}
 
 event: done
-data: {"done": true, "provider": "groq", "conversation_id": "<uuid>"}
+data: {"done": true, "provider": "groq", "conversation_id": "<uuid>", "citations": [{"type": "quran", "reference": "Quran 2:255", "source_doc_id": null}]}
 
 event: error
 data: {"error": "<message>"}
 ```
+
+The `sources` event is only emitted when the knowledge base returns relevant results. It arrives before the first `delta` so the frontend can display source references while the response streams. The `citations` array in `done` contains structured citations parsed from the completed LLM response.
 
 ### Provider failover
 
@@ -149,6 +162,8 @@ Providers are tried in order: **Groq → Gemini → OpenRouter**. Before each at
 - `app/middleware/auth.py`: Supabase JWT verification with cached JWKS.
 - `app/middleware/rate_limit.py`: in-memory sliding window limiter.
 - `app/routers`: HTTP route modules.
+- `app/services/search.py`: `semantic_search()` — embeds query with Gemini `RETRIEVAL_QUERY`, calls `match_chunks` RPC, returns ranked `SearchResult` objects; `build_context_block()` formats results for LLM injection.
+- `app/utils/citations.py`: `extract_citations()` — parses `[Quran X:Y]`, `[Hadith Collection, N]`, and scholarly bracket patterns from LLM text.
 - `app/services/llm`: OpenAI-compatible Groq, Gemini, OpenRouter, and provider failover.
   - `prompts.py`: Islamic system prompt constant.
   - `base.py`: `LLMProvider` protocol (`stream_chat`, `complete`, `check_rate_limit`).
@@ -237,13 +252,14 @@ For OCR of scanned PDFs, pytesseract must be installed along with the `tesseract
 
 Implemented now:
 
-- Authenticated chat streaming directly to LLM providers.
+- Authenticated chat streaming with RAG context injection and citation extraction.
 - Conversation and message persistence through Supabase REST.
 - Provider failover: Groq, then Gemini, then OpenRouter.
 - Document ingestion pipeline with admin management routes.
-- pgvector embeddings stored in Supabase for future RAG.
+- pgvector semantic search via `match_chunks` RPC wired into every chat request.
+- Standalone `GET /chat/search` endpoint for debugging retrieval.
 
 Not implemented yet:
 
-- RAG/vector search (embeddings are stored; query pipeline is next).
+- Re-ranking and multi-hop reasoning.
 - Admin functionality beyond document management.

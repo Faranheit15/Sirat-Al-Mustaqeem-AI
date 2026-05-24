@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sse_starlette.sse import EventSourceResponse
 
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.middleware.auth import UserContext
 from app.middleware.rate_limit import check_rate_limit
@@ -16,9 +16,14 @@ from app.models.schemas import (
     ConversationMessagesResponse,
     ConversationResponse,
     CreateConversationRequest,
+    SearchData,
+    SearchResponse,
+    SearchResult,
 )
 from app.services.conversation import ConversationService, get_conversation_service
 from app.services.llm.router import ProviderRouter, get_provider_router
+from app.services.search import semantic_search
+from app.services.supabase import SupabaseClient, get_supabase_client
 from app.utils.streaming import stream_chat_response
 
 logger = get_logger(__name__)
@@ -27,6 +32,8 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 CurrentUser = Annotated[UserContext, Depends(check_rate_limit)]
 ConversationDependency = Annotated[ConversationService, Depends(get_conversation_service)]
 ProviderRouterDependency = Annotated[ProviderRouter, Depends(get_provider_router)]
+SupabaseDependency = Annotated[SupabaseClient, Depends(get_supabase_client)]
+SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
 @router.post("/stream", response_class=EventSourceResponse)
@@ -35,6 +42,8 @@ async def stream_chat(
     current_user: CurrentUser,
     llm_router: ProviderRouterDependency,
     conversations: ConversationDependency,
+    supabase: SupabaseDependency,
+    settings: SettingsDep,
 ) -> EventSourceResponse:
     logger.info(
         "chat_stream | user_id=%s conversation_id=%s message_count=%d",
@@ -47,6 +56,8 @@ async def stream_chat(
         user_id=current_user.user_id,
         provider_router=llm_router,
         conversations=conversations,
+        supabase=supabase,
+        settings=settings,
     )
 
 
@@ -55,8 +66,9 @@ async def stream_chat_test(
     payload: ChatStreamRequest,
     llm_router: ProviderRouterDependency,
     conversations: ConversationDependency,
+    supabase: SupabaseDependency,
+    settings: SettingsDep,
 ) -> EventSourceResponse:
-    settings = get_settings()
     if not settings.debug:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found.")
 
@@ -71,6 +83,39 @@ async def stream_chat_test(
         user_id=settings.local_dev_user_id,
         provider_router=llm_router,
         conversations=conversations,
+        supabase=supabase,
+        settings=settings,
+    )
+
+
+@router.get("/search", response_model=SearchResponse)
+async def search_knowledge_base(
+    current_user: CurrentUser,
+    supabase: SupabaseDependency,
+    settings: SettingsDep,
+    q: str = Query(min_length=1, max_length=500, description="Search query"),
+    top_k: int = Query(default=5, ge=1, le=20, description="Number of results"),
+    threshold: float = Query(default=0.7, ge=0.0, le=1.0, description="Similarity threshold"),
+) -> SearchResponse:
+    logger.info(
+        "chat_search | user_id=%s query_len=%d top_k=%d",
+        current_user.user_id,
+        len(q),
+        top_k,
+    )
+    results = await semantic_search(
+        query=q,
+        supabase=supabase,
+        settings=settings,
+        top_k=top_k,
+        threshold=threshold,
+    )
+    return SearchResponse(
+        data=SearchData(
+            query=q,
+            results=[SearchResult.model_validate(r.__dict__) for r in results],
+        ),
+        message=f"{len(results)} result(s) found.",
     )
 
 

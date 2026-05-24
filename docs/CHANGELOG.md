@@ -4,6 +4,21 @@ All notable changes to Sirat Al Mustaqeem AI will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- RAG search service (`app/services/search.py`): `semantic_search()` embeds the query via Gemini `RETRIEVAL_QUERY` task type, calls the `match_chunks` Supabase RPC, and returns ranked `SearchResult` objects with `source_label()` helpers for context formatting. Returns an empty list gracefully if no documents are indexed or the embedding call fails.
+- `match_chunks` PostgreSQL function (`migrations/003_match_chunks.sql`): pgvector cosine similarity search over `document_chunks`, joined with `documents`, filtered to `status = 'completed'`, with configurable `match_count` and `match_threshold` parameters.
+- Citation extractor (`app/utils/citations.py`): `extract_citations()` parses `[Quran X:Y]`, `[Hadith Collection, N]`, and `[Author, Book, ...]` bracket patterns from LLM response text, deduplicates, and returns structured `Citation(type, reference)` objects.
+- `embed_query()` in `app/services/ingestion/embedder.py`: single-string embedding using `RETRIEVAL_QUERY` task type (asymmetric vs ingestion's `RETRIEVAL_DOCUMENT`).
+- `SupabaseClient.match_chunks()`: POST to `/rpc/match_chunks` with query vector, match count, and threshold.
+- `GET /chat/search`: authenticated semantic search endpoint — accepts `q`, `top_k` (1–20), and `threshold` (0–1) query params; returns ranked chunks with similarity scores and source labels. Useful for debugging RAG retrieval independently.
+- RAG wired into `POST /chat/stream` and `POST /chat/stream/test`: before each LLM call the latest user message is embedded, top-k chunks are retrieved, and a context block is appended to the system prompt. If no chunks are found, chat proceeds without context (no failure).
+- New `event: sources` SSE event emitted before the first `delta` event when RAG finds results: `data: [{"chunk_id", "document_id", "document_title", "source_label", "doc_type", "similarity"}, ...]`. Lets the frontend display sources before the response starts streaming.
+- Extracted citations are now stored in the `messages.citations` JSONB column for the assistant message.
+- `event: done` payload now includes a `citations` field: `[{"type", "reference", "source_doc_id"}, ...]`.
+- `RAG_TOP_K` (default `5`) and `RAG_THRESHOLD` (default `0.7`) environment variables added to `Settings`.
+- New Pydantic schemas: `SearchResult`, `Citation`, `SearchData`, `SearchResponse`.
+
 ### Fixed
 
 - `GET /admin/ingestion-jobs/{job_id}/stream` SSE endpoint: streams job status, progress, error_log, doc_status, page_count, chunk_count, language, and is_ocr every 2 s until the job reaches `completed` or `failed`. Uses `event: progress` for intermediate ticks and `event: done` for the terminal event. Client disconnect is handled gracefully via `asyncio.CancelledError`.

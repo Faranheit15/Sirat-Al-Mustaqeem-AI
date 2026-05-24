@@ -16,9 +16,13 @@ logger = get_logger(__name__)
 _INITIAL_RETRY_DELAY = 1.0  # seconds; doubles on each successive retry
 
 
-def _with_system_prompt(messages: Sequence[ChatMessage]) -> list[ChatMessage]:
+def _with_system_prompt(
+    messages: Sequence[ChatMessage],
+    context: str | None = None,
+) -> list[ChatMessage]:
+    system_content = SYSTEM_PROMPT if not context else f"{SYSTEM_PROMPT}\n\n{context}"
     return [
-        ChatMessage(role="system", content=SYSTEM_PROMPT),
+        ChatMessage(role="system", content=system_content),
         *(message for message in messages if message.role != "system"),
     ]
 
@@ -29,9 +33,13 @@ class ProviderRouter:
     last_provider_name: str | None = None
     rate_limits: dict[str, str | None] = field(default_factory=dict)
 
-    async def stream_chat(self, messages: Sequence[ChatMessage]) -> AsyncIterator[str]:
+    async def stream_chat(
+        self,
+        messages: Sequence[ChatMessage],
+        context: str | None = None,
+    ) -> AsyncIterator[str]:
         errors: list[str] = []
-        prompted_messages = _with_system_prompt(messages)
+        prompted_messages = _with_system_prompt(messages, context=context)
         retry_count = 0
         retry_delay = _INITIAL_RETRY_DELAY
 
